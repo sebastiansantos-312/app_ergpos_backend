@@ -8,7 +8,7 @@ Funciona como API REST que se conecta con el frontend creado en **React + TypeSc
 
 ## 🚀 Tecnologías principales
 
-- ☕ **Java 17+**
+- ☕ **Java 21+**
 - 🌱 **Spring Boot 3**
 - 🧩 **Spring Data JPA**
 - 🔐 **Spring Security (opcional)**
@@ -18,4 +18,9 @@ Funciona como API REST que se conecta con el frontend creado en **React + TypeSc
 
 ---
 
-## 📁 Estructura del proyecto
+## ⚙️ Instalación
+
+1. Clona el repositorio:  
+```bash
+git clone https://github.com/sebastiansantos-312/app_ergpos_frontend.git
+cd erp-pos-backend
