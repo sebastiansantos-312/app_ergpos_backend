@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ergpos.app.model.Producto;
 import com.ergpos.app.repository.ProductoRepository;
 
+import org.springframework.web.bind.annotation.CrossOrigin; // <-- ¡Importa esto!
+
+@CrossOrigin(origins = "*") // <-- AÑADE ESTA LÍNEA
+
 @RestController
 @RequestMapping("/api/productos")
 public class ProductoController {

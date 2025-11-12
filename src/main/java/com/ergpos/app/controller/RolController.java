@@ -8,6 +8,10 @@ import org.springframework.web.bind.annotation.*;
 import com.ergpos.app.model.Role;
 import com.ergpos.app.repository.RoleRepository;
 
+import org.springframework.web.bind.annotation.CrossOrigin; // <-- ¡Importa esto!
+
+@CrossOrigin(origins = "*") // <-- AÑADE ESTA LÍNEA
+
 @RestController
 @RequestMapping("/api/roles")
 public class RolController {
