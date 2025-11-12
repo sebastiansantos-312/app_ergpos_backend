@@ -9,6 +9,9 @@ COPY pom.xml ./
 COPY mvnw ./
 COPY .mvn .mvn
 
+# 🔥 Dar permisos de ejecución al wrapper de Maven
+RUN chmod +x mvnw
+
 # Descargar dependencias (para cache más eficiente)
 RUN ./mvnw dependency:go-offline
 
