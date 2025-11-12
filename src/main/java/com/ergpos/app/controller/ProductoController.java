@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ergpos.app.model.Producto;
@@ -24,24 +25,33 @@ public class ProductoController {
         this.productoRepository = productoRepository;
     }
 
+    // Listar todos los productos o buscar por nombre/código
     @GetMapping
-    public List<Producto> listarProductos() {
-        return productoRepository.findAll();
+    public List<Producto> listarProductos(
+            @RequestParam(required = false) String nombre,
+            @RequestParam(required = false) String codigo) {
+        if (nombre != null) {
+            return productoRepository.findByNombreContainingIgnoreCase(nombre);
+        } else if (codigo != null) {
+            return productoRepository.findByCodigo(codigo).map(List::of).orElse(List.of());
+        } else {
+            return productoRepository.findAll();
+        }
     }
 
-    @SuppressWarnings("null")
-    @PostMapping
-    public Producto crearProducto(@RequestBody Producto producto) {
-        return productoRepository.save(producto);
-    }
-
-    @SuppressWarnings("null")
+    // Obtener por UUID (opcional)
     @GetMapping("/{id}")
     public Producto obtenerProducto(@PathVariable UUID id) {
         return productoRepository.findById(id).orElse(null);
     }
 
-    @SuppressWarnings("null")
+    // Crear producto
+    @PostMapping
+    public Producto crearProducto(@RequestBody Producto producto) {
+        return productoRepository.save(producto);
+    }
+
+    // Eliminar producto
     @DeleteMapping("/{id}")
     public void eliminarProducto(@PathVariable UUID id) {
         productoRepository.deleteById(id);
