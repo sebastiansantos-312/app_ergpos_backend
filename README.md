@@ -8,7 +8,7 @@ Funciona como API REST que se conecta con el frontend creado en **React + TypeSc
 
 ## 🚀 Tecnologías principales
 
-- ☕ **Java 17+**
+- ☕ **Java 21+**
 - 🌱 **Spring Boot 3**
 - 🧩 **Spring Data JPA**
 - 🔐 **Spring Security (opcional)**
