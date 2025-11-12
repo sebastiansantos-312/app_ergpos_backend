@@ -3,15 +3,18 @@ package com.ergpos.app.controller;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+// <-- ¡Importa esto!
 import org.springframework.web.bind.annotation.*;
 
 import com.ergpos.app.model.Usuario;
 import com.ergpos.app.model.LoginRequest;
 import com.ergpos.app.repository.UsuarioRepository;
 
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "*") // <-- AÑADE ESTA LÍNEA
+
 @RestController
 @RequestMapping("/api/usuarios")
 public class UsuarioController {
@@ -61,27 +64,16 @@ public class UsuarioController {
         return usuarioRepository.findByEmailIgnoreCase(email).orElse(null);
     }
 
-    // ✅ Nuevo método login corregido
-    @PostMapping(value = "/login", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<?> login(@RequestBody(required = false) LoginRequest loginRequest) {
-        if (loginRequest == null || loginRequest.getEmail() == null || loginRequest.getPassword() == null) {
-            return ResponseEntity.badRequest().body("{\"message\": \"Solicitud inválida. Faltan datos.\"}");
+    @PostMapping("/login")
+    public ResponseEntity<Usuario> login(@RequestBody LoginRequest loginRequest) {
+        Optional<Usuario> usuarioOpt = usuarioRepository.findByEmailIgnoreCase(loginRequest.getEmail());
+        if (usuarioOpt.isPresent()) {
+            Usuario usuario = usuarioOpt.get();
+            if (usuario.getPassword().equals(loginRequest.getPassword())) {
+                return ResponseEntity.ok(usuario);
+            }
         }
-
-        Optional<Usuario> usuarioOpt = usuarioRepository.findByEmailIgnoreCase(loginRequest.getEmail().trim());
-        if (usuarioOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body("{\"message\": \"Correo o contraseña incorrectos.\"}");
-        }
-
-        Usuario usuario = usuarioOpt.get();
-
-        if (!usuario.getPassword().trim().equals(loginRequest.getPassword().trim())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body("{\"message\": \"Correo o contraseña incorrectos.\"}");
-        }
-
-        usuario.setPassword(null);
-        return ResponseEntity.ok(usuario);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
+
 }
