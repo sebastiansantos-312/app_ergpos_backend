@@ -22,5 +22,5 @@ Funciona como API REST que se conecta con el frontend creado en **React + TypeSc
 
 1. Clona el repositorio:  
 ```bash
-git clone https://github.com/tu-usuario/erp-pos-backend.git
+git clone https://github.com/sebastiansantos-312/app_ergpos_frontend.git
 cd erp-pos-backend
