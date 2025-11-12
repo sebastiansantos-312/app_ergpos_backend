@@ -65,15 +65,28 @@ public class UsuarioController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Usuario> login(@RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
+        System.out.println("📩 Login recibido: " + loginRequest.getEmail() + " / " + loginRequest.getPassword());
+
         Optional<Usuario> usuarioOpt = usuarioRepository.findByEmailIgnoreCase(loginRequest.getEmail());
+
         if (usuarioOpt.isPresent()) {
             Usuario usuario = usuarioOpt.get();
+            System.out.println("✅ Usuario encontrado: " + usuario.getEmail());
+            System.out.println("🔑 Password en BD: " + usuario.getPassword());
+
             if (usuario.getPassword().equals(loginRequest.getPassword())) {
+                usuario.setPassword(null);
                 return ResponseEntity.ok(usuario);
+            } else {
+                System.out.println("❌ Contraseña incorrecta");
             }
+        } else {
+            System.out.println("❌ Usuario no encontrado");
         }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body("{\"message\":\"Correo o contraseña incorrectos\"}");
     }
 
 }
