@@ -18,4 +18,9 @@ Funciona como API REST que se conecta con el frontend creado en **React + TypeSc
 
 ---
 
-## 📁 Estructura del proyecto
+## ⚙️ Instalación
+
+1. Clona el repositorio:  
+```bash
+git clone https://github.com/tu-usuario/erp-pos-backend.git
+cd erp-pos-backend
