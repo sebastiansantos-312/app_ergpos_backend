@@ -12,6 +12,10 @@ import com.ergpos.app.model.Usuario;
 import com.ergpos.app.model.LoginRequest;
 import com.ergpos.app.repository.UsuarioRepository;
 
+import org.springframework.web.bind.annotation.CrossOrigin; // <-- ¡Importa esto!
+
+@CrossOrigin(origins = "*") // <-- AÑADE ESTA LÍNEA
+
 @RestController
 @RequestMapping("/api/usuarios")
 public class UsuarioController {
