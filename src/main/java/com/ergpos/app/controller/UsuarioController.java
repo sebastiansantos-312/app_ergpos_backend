@@ -73,10 +73,14 @@ public class UsuarioController {
         if (usuarioOpt.isPresent()) {
             Usuario usuario = usuarioOpt.get();
             System.out.println("✅ Usuario encontrado: " + usuario.getEmail());
-            System.out.println("🔑 Password en BD: " + usuario.getPassword());
+            System.out.println("🔑 Password en BD: [" + usuario.getPassword() + "]");
 
-            if (usuario.getPassword().equals(loginRequest.getPassword())) {
-                usuario.setPassword(null);
+            // Normalizar para evitar errores por espacios o mayúsculas
+            String passBd = usuario.getPassword() != null ? usuario.getPassword().trim() : "";
+            String passInput = loginRequest.getPassword() != null ? loginRequest.getPassword().trim() : "";
+
+            if (passBd.equals(passInput)) {
+                usuario.setPassword(null); // nunca devolver el password
                 return ResponseEntity.ok(usuario);
             } else {
                 System.out.println("❌ Contraseña incorrecta");
