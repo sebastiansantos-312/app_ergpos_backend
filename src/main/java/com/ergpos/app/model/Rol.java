@@ -1,28 +1,20 @@
 package com.ergpos.app.model;
 
 import jakarta.persistence.*;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
-@Table(name = "productos")
-public class Producto {
+@Table(name = "roles")
+public class Rol {
 
     @Id
     @GeneratedValue
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String codigo;
-
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String nombre;
-
-    private String descripcion;
-
-    @Column(nullable = false)
-    private BigDecimal precio;
 
     @Column(nullable = false)
     private Boolean activo = true;
@@ -32,6 +24,10 @@ public class Producto {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    // RELACIÓN MANY-TO-MANY CORRECTA
+    @ManyToMany(mappedBy = "roles")
+    private Set<Usuario> usuarios;
 
     @PrePersist
     public void prePersist() {
@@ -53,36 +49,12 @@ public class Producto {
         this.id = id;
     }
 
-    public String getCodigo() {
-        return codigo;
-    }
-
-    public void setCodigo(String codigo) {
-        this.codigo = codigo;
-    }
-
     public String getNombre() {
         return nombre;
     }
 
     public void setNombre(String nombre) {
         this.nombre = nombre;
-    }
-
-    public String getDescripcion() {
-        return descripcion;
-    }
-
-    public void setDescripcion(String descripcion) {
-        this.descripcion = descripcion;
-    }
-
-    public BigDecimal getPrecio() {
-        return precio;
-    }
-
-    public void setPrecio(BigDecimal precio) {
-        this.precio = precio;
     }
 
     public Boolean getActivo() {
@@ -99,5 +71,13 @@ public class Producto {
 
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Set<Usuario> getUsuarios() {
+        return usuarios;
+    }
+
+    public void setUsuarios(Set<Usuario> usuarios) {
+        this.usuarios = usuarios;
     }
 }
