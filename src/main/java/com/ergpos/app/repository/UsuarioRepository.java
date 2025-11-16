@@ -10,6 +10,8 @@ import com.ergpos.app.model.Usuario;
 
 public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
     Optional<Usuario> findByEmailIgnoreCase(String email);
-
+    List<Usuario> findByActivoTrue();
     List<Usuario> findByNombreContainingIgnoreCase(String nombre);
+    Optional<Usuario> findByNombreIgnoreCase(String nombre);
+    List<Usuario> findByActivoFalse();
 }

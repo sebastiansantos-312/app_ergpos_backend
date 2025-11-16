@@ -1,8 +1,11 @@
 package com.ergpos.app.model;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.UUID;
 
 @Entity
 @Table(name = "usuarios")
@@ -18,32 +21,88 @@ public class Usuario {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @JsonIgnore
     @Column(nullable = false)
     private String password;
 
-    @ManyToOne
-    @JoinColumn(name = "rol_id", nullable = false)
-    private Role rol;
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "usuario_roles", joinColumns = @JoinColumn(name = "usuario_id"), inverseJoinColumns = @JoinColumn(name = "rol_id"))
+    private Set<Rol> roles;
 
-    @Column(name = "created_at")
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @Column(nullable = false)
+    private Boolean activo = true;
 
-    // Getters y Setters
-    public UUID getId() { return id; }
-    public void setId(UUID id) { this.id = id; }
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 
-    public String getNombre() { return nombre; }
-    public void setNombre(String nombre) { this.nombre = nombre; }
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
+    @PrePersist
+    public void prePersist() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
 
-    public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password; }
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 
-    public Role getRol() { return rol; }
-    public void setRol(Role rol) { this.rol = rol; }
+    // Getters & Setters
+    public UUID getId() {
+        return id;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public Boolean getActivo() {
+        return activo;
+    }
+
+    public void setActivo(Boolean activo) {
+        this.activo = activo;
+    }
+
+    public Set<Rol> getRoles() {
+        return roles;
+    }
+
+    public void setRoles(Set<Rol> roles) {
+        this.roles = roles;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
 }

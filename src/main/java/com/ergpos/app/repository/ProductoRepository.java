@@ -8,6 +8,7 @@ import com.ergpos.app.model.Producto;
 
 public interface ProductoRepository extends JpaRepository<Producto, UUID> {
     Optional<Producto> findByCodigo(String codigo);
-
-    List<Producto> findByNombreContainingIgnoreCase(String nombre);
+    List<Producto> findByNombreContainingIgnoreCaseAndActivoTrue(String nombre);
+    List<Producto> findByActivoTrue();
+    List<Producto> findByActivoFalse();
 }
