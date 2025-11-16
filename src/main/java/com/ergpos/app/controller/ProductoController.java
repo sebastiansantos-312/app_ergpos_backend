@@ -1,63 +1,46 @@
 package com.ergpos.app.controller;
 
 import java.util.List;
-import java.util.UUID;
-
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
-import com.ergpos.app.model.Producto;
-import com.ergpos.app.repository.ProductoRepository;
-
-import org.springframework.web.bind.annotation.CrossOrigin; // <-- ¡Importa esto!
-
-@CrossOrigin(origins = "*") // <-- AÑADE ESTA LÍNEA
+//import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+import com.ergpos.app.dto.producto.ProductoRequestDTO;
+import com.ergpos.app.dto.producto.ProductoResponseDTO;
+import com.ergpos.app.service.ProductoService;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/productos")
+@CrossOrigin(origins = "*")
 public class ProductoController {
 
-    private final ProductoRepository productoRepository;
+    private final ProductoService productoService;
 
-    public ProductoController(ProductoRepository productoRepository) {
-        this.productoRepository = productoRepository;
+    public ProductoController(ProductoService productoService) {
+        this.productoService = productoService;
     }
 
-    // Listar todos los productos o buscar por nombre/código
+    //@PreAuthorize("hasRole('ADMINISTRADOR') or hasRole('SUPER_ADMIN')")
     @GetMapping
-    public List<Producto> listarProductos(
-            @RequestParam(required = false) String nombre,
-            @RequestParam(required = false) String codigo) {
-        if (nombre != null) {
-            return productoRepository.findByNombreContainingIgnoreCase(nombre);
-        } else if (codigo != null) {
-            return productoRepository.findByCodigo(codigo).map(List::of).orElse(List.of());
-        } else {
-            return productoRepository.findAll();
-        }
+    public List<ProductoResponseDTO> listarProductos(@RequestParam(required = false) Boolean activo) {
+        return productoService.listarProductos(activo);
     }
 
-    // Obtener por UUID (opcional)
-    @GetMapping("/{id}")
-    public Producto obtenerProducto(@PathVariable UUID id) {
-        return productoRepository.findById(id).orElse(null);
-    }
-
-    // Crear producto
+    //@PreAuthorize("hasRole('ADMINISTRADOR') or hasRole('SUPER_ADMIN')")
     @PostMapping
-    public Producto crearProducto(@RequestBody Producto producto) {
-        return productoRepository.save(producto);
+    public ProductoResponseDTO crearProducto(@Valid @RequestBody ProductoRequestDTO request) {
+        return productoService.crearProducto(request);
     }
 
-    // Eliminar producto
-    @DeleteMapping("/{id}")
-    public void eliminarProducto(@PathVariable UUID id) {
-        productoRepository.deleteById(id);
+    //@PreAuthorize("hasRole('ADMINISTRADOR') or hasRole('SUPER_ADMIN')")
+    @PutMapping("/codigo/{codigo}/desactivar")
+    public ProductoResponseDTO darDeBaja(@PathVariable String codigo) {
+        return productoService.cambiarEstadoProducto(codigo, false);
     }
+
+    //@PreAuthorize("hasRole('ADMINISTRADOR') or hasRole('SUPER_ADMIN')")
+    @PutMapping("/codigo/{codigo}/activar")
+    public ProductoResponseDTO restaurarProducto(@PathVariable String codigo) {
+        return productoService.cambiarEstadoProducto(codigo, true);
+    }
+
 }
