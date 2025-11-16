@@ -1,79 +1,51 @@
 package com.ergpos.app.controller;
 
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-// <-- ¡Importa esto!
+//import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import com.ergpos.app.model.Usuario;
-import com.ergpos.app.model.LoginRequest;
-import com.ergpos.app.repository.UsuarioRepository;
-
-@CrossOrigin(origins = "*") // <-- AÑADE ESTA LÍNEA
+import com.ergpos.app.dto.usuarios.UsuarioRequestDTO;
+import com.ergpos.app.dto.usuarios.UsuarioResponseDTO;
+import com.ergpos.app.service.UsuarioService;
 
 @RestController
 @RequestMapping("/api/usuarios")
+@CrossOrigin(origins = "*")
 public class UsuarioController {
 
-    private final UsuarioRepository usuarioRepository;
+    private final UsuarioService usuarioService;
 
-    public UsuarioController(UsuarioRepository usuarioRepository) {
-        this.usuarioRepository = usuarioRepository;
+    public UsuarioController(UsuarioService usuarioService) {
+        this.usuarioService = usuarioService;
     }
 
-    @GetMapping
-    public List<Usuario> listarUsuarios(@RequestParam(required = false) String nombre,
-            @RequestParam(required = false) String email) {
-        if (nombre != null) {
-            return usuarioRepository.findByNombreContainingIgnoreCase(nombre);
-        } else if (email != null) {
-            return usuarioRepository.findByEmailIgnoreCase(email)
-                    .map(List::of)
-                    .orElse(List.of());
-        } else {
-            return usuarioRepository.findAll();
-        }
+    //@PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPER_ADMIN')")
+    @GetMapping("/activos")
+    public List<UsuarioResponseDTO> listarUsuariosActivos() {
+        return usuarioService.listarActivos();
     }
 
+    //@PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPER_ADMIN')")
+    @GetMapping("/inactivos")
+    public List<UsuarioResponseDTO> listarUsuariosInactivos() {
+        return usuarioService.listarInactivos();
+    }
+
+    //@PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping
-    public Usuario crearUsuario(@RequestBody Usuario usuario) {
-        return usuarioRepository.save(usuario);
+    public UsuarioResponseDTO crearUsuario(@RequestBody UsuarioRequestDTO request) {
+        return usuarioService.crearUsuario(request);
     }
 
-    @GetMapping("/{id}")
-    public Usuario obtenerUsuario(@PathVariable UUID id) {
-        return usuarioRepository.findById(id).orElse(null);
+   // @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PutMapping("/email/{email}/desactivar")
+    public UsuarioResponseDTO desactivarUsuario(@PathVariable String email) {
+        return usuarioService.desactivarUsuario(email);
     }
 
-    @DeleteMapping("/{id}")
-    public void eliminarUsuario(@PathVariable UUID id) {
-        usuarioRepository.deleteById(id);
-    }
-
-    @GetMapping("/buscar/nombre/{nombre}")
-    public List<Usuario> buscarPorNombre(@PathVariable String nombre) {
-        return usuarioRepository.findByNombreContainingIgnoreCase(nombre);
-    }
-
-    @GetMapping("/buscar/email")
-    public Usuario buscarPorEmail(@RequestParam String email) {
-        return usuarioRepository.findByEmailIgnoreCase(email).orElse(null);
-    }
-
-    @PostMapping("/login")
-    public ResponseEntity<Usuario> login(@RequestBody LoginRequest loginRequest) {
-        Optional<Usuario> usuarioOpt = usuarioRepository.findByEmailIgnoreCase(loginRequest.getEmail());
-        if (usuarioOpt.isPresent()) {
-            Usuario usuario = usuarioOpt.get();
-            if (usuario.getPassword().equals(loginRequest.getPassword())) {
-                return ResponseEntity.ok(usuario);
-            }
-        }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    //@PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PutMapping("/email/{email}/activar")
+    public UsuarioResponseDTO activarUsuario(@PathVariable String email) {
+        return usuarioService.activarUsuario(email);
     }
 
 }

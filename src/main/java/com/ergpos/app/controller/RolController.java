@@ -1,64 +1,55 @@
 package com.ergpos.app.controller;
 
 import java.util.List;
-import java.util.UUID;
-
+//import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import com.ergpos.app.model.Role;
-import com.ergpos.app.repository.RoleRepository;
-
-import org.springframework.web.bind.annotation.CrossOrigin; // <-- ¡Importa esto!
-
-@CrossOrigin(origins = "*") // <-- AÑADE ESTA LÍNEA
+import com.ergpos.app.dto.roles.RolRequestDTO;
+import com.ergpos.app.dto.roles.RolResponseDTO;
+import com.ergpos.app.service.RolService;
 
 @RestController
 @RequestMapping("/api/roles")
+@CrossOrigin(origins = "*")
 public class RolController {
 
-    private final RoleRepository rolRepository;
+    private final RolService rolService;
 
-    public RolController(RoleRepository rolRepository) {
-        this.rolRepository = rolRepository;
+    public RolController(RolService rolService) {
+        this.rolService = rolService;
     }
 
-    // Listar todos los roles
+    // Solo ADMINISTRADOR o SUPER_ADMIN pueden ver los roles
+    //@PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPER_ADMIN')")
     @GetMapping
-    public List<Role> listarRoles() {
-        return rolRepository.findAll();
+    public List<RolResponseDTO> listarActivos() {
+        return rolService.listarActivos();
     }
 
-    // Crear un rol
+    // Solo ADMINISTRADOR o SUPER_ADMIN pueden ver roles inactivos
+    //@PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPER_ADMIN')")
+    @GetMapping("/inactivos")
+    public List<RolResponseDTO> listarInactivos() {
+        return rolService.listarInactivos();
+    }
+
+    // Solo SUPER_ADMIN puede crear roles
+   // @PreAuthorize("hasRole('SUPER_ADMIN')")
     @PostMapping
-    public Role crearRol(@RequestBody Role rol) {
-        return rolRepository.save(rol);
+    public RolResponseDTO crearRol(@RequestBody RolRequestDTO request) {
+        return rolService.crearRol(request);
     }
 
-    // Obtener un rol por ID
-    @GetMapping("/{id}")
-    public Role obtenerRol(@PathVariable UUID id) {
-        return rolRepository.findById(id).orElse(null);
+    // Solo SUPER_ADMIN puede activar roles
+   // @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PutMapping("/{nombre}/activar")
+    public RolResponseDTO activarRol(@PathVariable String nombre) {
+        return rolService.activarRol(nombre);
     }
 
-    // Buscar rol por nombre (ignore case)
-    @GetMapping("/buscar/nombre/{nombre}")
-    public Role buscarPorNombre(@PathVariable String nombre) {
-        return rolRepository.findByNombreIgnoreCase(nombre).orElse(null);
-    }
-
-    // Actualizar rol
-    @PutMapping("/{id}")
-    public Role actualizarRol(@PathVariable UUID id, @RequestBody Role rolDetalles) {
-        return rolRepository.findById(id).map(rol -> {
-            rol.setNombre(rolDetalles.getNombre());
-            rol.setDescripcion(rolDetalles.getDescripcion());
-            return rolRepository.save(rol);
-        }).orElse(null);
-    }
-
-    // Eliminar rol
-    @DeleteMapping("/{id}")
-    public void eliminarRol(@PathVariable UUID id) {
-        rolRepository.deleteById(id);
+    // Solo SUPER_ADMIN puede desactivar roles
+  //  @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PutMapping("/{nombre}/desactivar")
+    public RolResponseDTO desactivarRol(@PathVariable String nombre) {
+        return rolService.desactivarRol(nombre);
     }
 }
