@@ -6,8 +6,6 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
-//import org.springframework.security.access.prepost.PreAuthorize;
-
 import com.ergpos.app.dto.movimientos.MovimientoInventarioRequestDTO;
 import com.ergpos.app.dto.movimientos.MovimientoInventarioResponseDTO;
 import com.ergpos.app.model.MovimientoInventario;
@@ -38,7 +36,6 @@ public class MovimientoInventarioService {
         return dto;
     }
 
-   // @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMINISTRADOR','GERENTE','ALMACENISTA')")
     public MovimientoInventarioResponseDTO registrarMovimiento(MovimientoInventarioRequestDTO request) {
 
         Producto producto = productoRepo.findByCodigo(request.getCodigoProducto())
@@ -58,7 +55,6 @@ public class MovimientoInventarioService {
         return toDTO(movimientoRepo.save(movimiento));
     }
 
-   // @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMINISTRADOR','GERENTE','ALMACENISTA','VENDEDOR')")
     public List<MovimientoInventarioResponseDTO> listarTodos() {
         return movimientoRepo.findAll()
                 .stream()
@@ -66,7 +62,6 @@ public class MovimientoInventarioService {
                 .collect(Collectors.toList());
     }
 
-    //@PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMINISTRADOR','GERENTE','ALMACENISTA','VENDEDOR')")
     public List<MovimientoInventarioResponseDTO> listarPorProducto(Producto producto) {
         return movimientoRepo.findByProducto(producto)
                 .stream()

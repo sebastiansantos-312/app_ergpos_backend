@@ -1,20 +1,17 @@
 package com.ergpos.app.controller;
 
-import java.util.List;
-
-import com.ergpos.app.dto.auth.LoginRequestDTO;
-import com.ergpos.app.dto.auth.LoginResponseDTO;
-import com.ergpos.app.model.Usuario;
-import com.ergpos.app.repository.UsuarioRepository;
-import com.ergpos.app.security.JwtService;
-
+import com.ergpos.app.dto.usuarios.LoginRequest;
+import com.ergpos.app.security.JwtUtils;
+import com.ergpos.app.service.UsuarioService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.validation.Valid;
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -22,49 +19,66 @@ import jakarta.validation.Valid;
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
-    private final UsuarioRepository usuarioRepository;
-    private final JwtService jwtService;
+    private final JwtUtils jwtUtils;
+    private final UsuarioService usuarioService;
 
     public AuthController(AuthenticationManager authenticationManager,
-            UsuarioRepository usuarioRepository,
-            JwtService jwtService) {
+            JwtUtils jwtUtils,
+            UsuarioService usuarioService) {
         this.authenticationManager = authenticationManager;
-        this.usuarioRepository = usuarioRepository;
-        this.jwtService = jwtService;
+        this.jwtUtils = jwtUtils;
+        this.usuarioService = usuarioService;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequestDTO request) {
-
+    public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
         try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            request.getEmail(),
-                            request.getPassword()));
-        } catch (BadCredentialsException ex) {
-            return ResponseEntity.status(401).body("Credenciales incorrectas");
+            String username = loginRequest.getUsername();
+
+            // Determinar si es email o código y obtener el email real
+            String email = determinarEmail(username);
+
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(email, loginRequest.getPassword()));
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String jwt = jwtUtils.generateJwtToken(authentication);
+
+            // Obtener información completa del usuario
+            var usuarioResponse = usuarioService.obtenerPorEmail(email);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("token", jwt);
+            response.put("type", "Bearer");
+            response.put("user", usuarioResponse);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("message", "Credenciales inválidas");
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(401).body(errorResponse);
         }
-
-        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-
-        if (!usuario.getActivo()) {
-            return ResponseEntity.status(403).body("Usuario desactivado");
-        }
-
-        List<String> roles = usuario.getRoles().stream()
-                .map(r -> r.getNombre())
-                .toList();
-
-        String token = jwtService.generateToken(usuario.getEmail(), roles);
-
-        LoginResponseDTO resp = new LoginResponseDTO(
-                token,
-                usuario.getNombre(),
-                usuario.getEmail(),
-                roles,
-                usuario.getActivo());
-
-        return ResponseEntity.ok(resp);
     }
+
+    private String determinarEmail(String username) {
+        if (username == null || username.isEmpty()) {
+            throw new IllegalArgumentException("El campo username no puede estar vacío");
+        }
+
+        if (username.contains("@")) {
+            System.out.println("Login con email: " + username);
+            return username;
+        }
+
+        var usuario = usuarioService.obtenerPorCodigo(username);
+        if (usuario == null) {
+            throw new IllegalArgumentException("Código de usuario no existe: " + username);
+        }
+
+        System.out.println("Login con código: " + username + ", email: " + usuario.getEmail());
+        return usuario.getEmail();
+    }
+
 }

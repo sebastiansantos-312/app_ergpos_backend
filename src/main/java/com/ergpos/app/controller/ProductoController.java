@@ -1,7 +1,8 @@
 package com.ergpos.app.controller;
 
 import java.util.List;
-//import org.springframework.security.access.prepost.PreAuthorize;
+import java.util.Map;
+
 import org.springframework.web.bind.annotation.*;
 import com.ergpos.app.dto.producto.ProductoRequestDTO;
 import com.ergpos.app.dto.producto.ProductoResponseDTO;
@@ -19,28 +20,51 @@ public class ProductoController {
         this.productoService = productoService;
     }
 
-    //@PreAuthorize("hasRole('ADMINISTRADOR') or hasRole('SUPER_ADMIN')")
     @GetMapping
     public List<ProductoResponseDTO> listarProductos(@RequestParam(required = false) Boolean activo) {
         return productoService.listarProductos(activo);
     }
 
-    //@PreAuthorize("hasRole('ADMINISTRADOR') or hasRole('SUPER_ADMIN')")
+    @GetMapping("/codigo/{codigo}")
+    public ProductoResponseDTO buscarPorCodigo(@PathVariable String codigo) {
+        return productoService.buscarPorCodigo(codigo);
+    }
+
+    @GetMapping("/buscar")
+    public List<ProductoResponseDTO> buscarPorNombre(@RequestParam String nombre) {
+        return productoService.buscarPorNombre(nombre);
+    }
+
     @PostMapping
     public ProductoResponseDTO crearProducto(@Valid @RequestBody ProductoRequestDTO request) {
         return productoService.crearProducto(request);
     }
 
-    //@PreAuthorize("hasRole('ADMINISTRADOR') or hasRole('SUPER_ADMIN')")
-    @PutMapping("/codigo/{codigo}/desactivar")
-    public ProductoResponseDTO darDeBaja(@PathVariable String codigo) {
-        return productoService.cambiarEstadoProducto(codigo, false);
+    @PutMapping("/codigo/{codigo}")
+    public ProductoResponseDTO actualizarProducto(
+            @PathVariable String codigo,
+            @Valid @RequestBody ProductoRequestDTO request) {
+        return productoService.actualizarProducto(codigo, request);
     }
 
-    //@PreAuthorize("hasRole('ADMINISTRADOR') or hasRole('SUPER_ADMIN')")
     @PutMapping("/codigo/{codigo}/activar")
-    public ProductoResponseDTO restaurarProducto(@PathVariable String codigo) {
+    public ProductoResponseDTO activarProducto(@PathVariable String codigo) {
         return productoService.cambiarEstadoProducto(codigo, true);
     }
 
+    @PutMapping("/codigo/{codigo}/desactivar")
+    public ProductoResponseDTO desactivarProducto(@PathVariable String codigo) {
+        return productoService.cambiarEstadoProducto(codigo, false);
+    }
+
+    //ENDPOINTS DE REPORTES/ESTADÍSTICAS
+    @GetMapping("/estadisticas")
+    public Map<String, Object> obtenerEstadisticas() {
+        return productoService.obtenerEstadisticas();
+    }
+
+    @GetMapping("/recientes")
+    public List<ProductoResponseDTO> productosRecientes() {
+        return productoService.productosRecientes();
+    }
 }

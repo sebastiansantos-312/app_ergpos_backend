@@ -1,7 +1,6 @@
 package com.ergpos.app.controller;
 
 import java.util.List;
-//import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
@@ -26,20 +25,17 @@ public class MovimientoInventarioController {
                 this.productoRepo = productoRepo;
         }
 
-       // @PreAuthorize("hasAnyRole('ALMACENISTA','ADMINISTRADOR','SUPER_ADMIN')")
         @PostMapping
         public MovimientoInventarioResponseDTO registrarMovimiento(
                         @Valid @RequestBody MovimientoInventarioRequestDTO request) {
                 return movimientoService.registrarMovimiento(request);
         }
 
-//@PreAuthorize("hasAnyRole('ALMACENISTA','ADMINISTRADOR','SUPER_ADMIN')")
         @GetMapping
         public List<MovimientoInventarioResponseDTO> listarTodos() {
                 return movimientoService.listarTodos();
         }
 
-       // @PreAuthorize("hasAnyRole('ALMACENISTA','ADMINISTRADOR','SUPER_ADMIN')")
         @GetMapping("/producto/{codigo}")
         public List<MovimientoInventarioResponseDTO> listarPorProducto(@PathVariable String codigo) {
                 Producto producto = productoRepo.findByCodigo(codigo)

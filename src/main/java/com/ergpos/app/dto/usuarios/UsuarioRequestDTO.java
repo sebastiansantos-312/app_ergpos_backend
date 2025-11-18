@@ -5,11 +5,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
-import java.util.Collection;
 import java.util.Set;
 
 public class UsuarioRequestDTO {
-
     @NotBlank(message = "El nombre es obligatorio")
     private String nombre;
 
@@ -21,10 +19,13 @@ public class UsuarioRequestDTO {
     @Size(min = 6, message = "La contraseña debe tener al menos 6 caracteres")
     private String password;
 
-    @NotEmpty(message = "Al menos un rol es obligatorio")
-    private Set<String> roles; // nombres de roles
+    private String codigo;
+    private String departamento;
+    private String puesto;
 
-    // Getters y setters
+    @NotEmpty(message = "Al menos un rol es obligatorio")
+    private Set<String> roles;
+
     public String getNombre() {
         return nombre;
     }
@@ -49,16 +50,35 @@ public class UsuarioRequestDTO {
         this.password = password;
     }
 
+    public String getCodigo() {
+        return codigo;
+    }
+
+    public void setCodigo(String codigo) {
+        this.codigo = codigo;
+    }
+
+    public String getDepartamento() {
+        return departamento;
+    }
+
+    public void setDepartamento(String departamento) {
+        this.departamento = departamento;
+    }
+
+    public String getPuesto() {
+        return puesto;
+    }
+
+    public void setPuesto(String puesto) {
+        this.puesto = puesto;
+    }
+
     public Set<String> getRoles() {
         return roles;
     }
 
     public void setRoles(Set<String> roles) {
         this.roles = roles;
-    }
-
-    public Collection<String> getRolNombres() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getRolNombres'");
     }
 }

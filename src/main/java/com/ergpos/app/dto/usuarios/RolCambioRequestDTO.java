@@ -4,15 +4,14 @@ import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 
 public class RolCambioRequestDTO {
-
     @NotEmpty(message = "Debe asignar al menos un rol")
-    private List<String> rolNombres; // nombres de roles nuevos
+    private List<String> roles; 
 
-    public List<String> getRolNombres() {
-        return rolNombres;
+    public List<String> getRoles() {
+        return roles;
     }
 
-    public void setRolNombres(List<String> rolNombres) {
-        this.rolNombres = rolNombres;
+    public void setRoles(List<String> roles) {
+        this.roles = roles;
     }
 }
