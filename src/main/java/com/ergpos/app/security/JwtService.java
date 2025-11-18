@@ -39,9 +39,14 @@ public class JwtService {
         Date now = new Date();
         Date exp = new Date(now.getTime() + expirationMs);
 
+        // Agregar prefijo ROLE_ a cada rol
+        List<String> rolesWithPrefix = roles.stream()
+                .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
+                .collect(Collectors.toList());
+
         return Jwts.builder()
                 .setSubject(email)
-                .claim("roles", roles)
+                .claim("roles", rolesWithPrefix) // Ahora con ROLE_
                 .setIssuedAt(now)
                 .setExpiration(exp)
                 .signWith(key, SignatureAlgorithm.HS256)
@@ -65,7 +70,6 @@ public class JwtService {
         return getClaims(token).getSubject();
     }
 
-    @SuppressWarnings("unchecked")
     public List<String> getRoles(String token) {
         Object raw = getClaims(token).get("roles");
         if (raw instanceof List<?> list) {

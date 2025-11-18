@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
-//import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -29,7 +28,6 @@ public class RolService {
         return dto;
     }
 
-   // @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMINISTRADOR','GERENTE','ALMACENISTA','VENDEDOR')")
     public List<RolResponseDTO> listarActivos() {
         return rolRepository.findByActivoTrue()
                 .stream()
@@ -37,7 +35,6 @@ public class RolService {
                 .collect(Collectors.toList());
     }
 
-    //@PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMINISTRADOR','GERENTE','ALMACENISTA','VENDEDOR')")
     public List<RolResponseDTO> listarInactivos() {
         return rolRepository.findByActivoFalse()
                 .stream()
@@ -45,7 +42,6 @@ public class RolService {
                 .collect(Collectors.toList());
     }
 
-    //@PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMINISTRADOR')")
     public RolResponseDTO crearRol(RolRequestDTO request) {
 
         if (rolRepository.findByNombreIgnoreCase(request.getNombre()).isPresent()) {
@@ -59,7 +55,6 @@ public class RolService {
         return toDTO(rolRepository.save(rol));
     }
 
-   // @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMINISTRADOR')")
     public RolResponseDTO activarRol(String nombre) {
         Rol rol = rolRepository.findByNombreIgnoreCase(nombre)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Rol no encontrado"));
@@ -68,7 +63,6 @@ public class RolService {
         return toDTO(rolRepository.save(rol));
     }
 
-   // @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMINISTRADOR')")
     public RolResponseDTO desactivarRol(String nombre) {
         Rol rol = rolRepository.findByNombreIgnoreCase(nombre)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Rol no encontrado"));
@@ -77,7 +71,6 @@ public class RolService {
         return toDTO(rolRepository.save(rol));
     }
 
-   // @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMINISTRADOR','GERENTE')")
     public RolResponseDTO obtenerPorNombre(String nombre) {
         Rol rol = rolRepository.findByNombreIgnoreCase(nombre)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Rol no encontrado"));
