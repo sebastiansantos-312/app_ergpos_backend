@@ -35,8 +35,9 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/**").permitAll() // ← Todos los endpoints API permitidos
-                        .anyRequest().permitAll() // ← Cualquier otra ruta también permitida
+                        .requestMatchers("/api/auth/**").permitAll() // Login público
+                        .requestMatchers("/api/**").authenticated()  //Resto de API requiere autenticación
+                        .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 

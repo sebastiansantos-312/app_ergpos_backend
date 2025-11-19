@@ -27,13 +27,19 @@ public class JwtFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
 
+        //EXCLUIR RUTAS PÚBLICAS - SOLUCIÓN CLAVE
+        String path = request.getServletPath();
+        if (path.startsWith("/api/auth/")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         String token = getTokenFromRequest(request);
 
         if (token != null && jwtUtils.validateJwtToken(token)) {
-
             String email = jwtUtils.getUserNameFromJwtToken(token);
 
-            // 🔥 Cargar UserDetails desde BD (IMPORTANTE)
+            // Cargar UserDetails desde BD
             UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
