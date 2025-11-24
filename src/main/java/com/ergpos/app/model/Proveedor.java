@@ -5,15 +5,27 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "roles")
-public class Rol {
+@Table(name = "proveedores")
+public class Proveedor {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 255)
+    @Column(nullable = false, length = 255)
     private String nombre;
+
+    @Column(unique = true, length = 20)
+    private String ruc;
+
+    @Column(length = 20)
+    private String telefono;
+
+    @Column(length = 255)
+    private String email;
+
+    @Column(columnDefinition = "TEXT")
+    private String direccion;
 
     @Column(nullable = false)
     private Boolean activo = true;
@@ -52,6 +64,37 @@ public class Rol {
         this.nombre = nombre;
     }
 
+    public String getRuc() {
+        return ruc;
+    }
+
+    public void setRuc(String ruc) {
+        this.ruc = ruc;
+    }
+
+    public String getTelefono() {
+        return telefono;
+    }
+
+    public void setTelefono(String telefono) {
+        this.telefono = telefono;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getDireccion() {
+        return direccion;
+    }
+
+    public void setDireccion(String direccion) {
+        this.direccion = direccion;
+    }
 
     public Boolean getActivo() {
         return activo;

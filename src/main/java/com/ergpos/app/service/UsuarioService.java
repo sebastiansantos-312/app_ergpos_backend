@@ -1,13 +1,13 @@
 package com.ergpos.app.service;
 
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
-
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import com.ergpos.app.dto.usuarios.CambiarPasswordRequestDTO;
-import com.ergpos.app.dto.usuarios.RolCambioRequestDTO;
 import com.ergpos.app.dto.usuarios.UsuarioRequestDTO;
 import com.ergpos.app.dto.usuarios.UsuarioResponseDTO;
 import com.ergpos.app.model.Rol;
@@ -16,13 +16,15 @@ import com.ergpos.app.repository.RolRepository;
 import com.ergpos.app.repository.UsuarioRepository;
 
 @Service
+@Transactional(readOnly = true)
 public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UsuarioService(UsuarioRepository usuarioRepository,
+    public UsuarioService(
+            UsuarioRepository usuarioRepository,
             RolRepository rolRepository,
             PasswordEncoder passwordEncoder) {
         this.usuarioRepository = usuarioRepository;
@@ -32,150 +34,187 @@ public class UsuarioService {
 
     private UsuarioResponseDTO toDTO(Usuario usuario) {
         UsuarioResponseDTO dto = new UsuarioResponseDTO();
+        dto.setId(usuario.getId());
         dto.setCodigo(usuario.getCodigo());
         dto.setNombre(usuario.getNombre());
         dto.setEmail(usuario.getEmail());
-        dto.setDepartamento(usuario.getDepartamento());
-        dto.setPuesto(usuario.getPuesto());
+        dto.setRol(usuario.getRol() != null ? usuario.getRol().getNombre() : null);
         dto.setActivo(usuario.getActivo());
-
-        List<String> roles = usuario.getRoles() == null
-                ? List.of()
-                : usuario.getRoles().stream()
-                        .map(Rol::getNombre)
-                        .collect(Collectors.toList());
-
-        dto.setRoles(roles);
+        dto.setCreatedAt(usuario.getCreatedAt());
+        dto.setUpdatedAt(usuario.getUpdatedAt());
         return dto;
     }
 
-    public List<UsuarioResponseDTO> listarActivos() {
-        return usuarioRepository.findByActivoTrue()
+    // Búsqueda dinámica con filtros
+    public List<UsuarioResponseDTO> listar(String nombre, String email, String rolNombre, Boolean activo) {
+        return usuarioRepository.buscarUsuarios(nombre, email, rolNombre, activo)
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
 
-    public List<UsuarioResponseDTO> listarInactivos() {
-        return usuarioRepository.findByActivoFalse()
-                .stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+    // Obtener por email
+    public UsuarioResponseDTO obtenerPorEmail(String email) {
+        String emailNormalizado = email.trim().toLowerCase();
+        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailNormalizado)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Usuario no encontrado con email: " + emailNormalizado));
+        return toDTO(usuario);
     }
 
-    public List<UsuarioResponseDTO> listarTodos() {
-        return usuarioRepository.findAll()
-                .stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
-    }
+    // Crear usuario
+    @Transactional
+    public UsuarioResponseDTO crear(UsuarioRequestDTO request) {
+        String email = request.getEmail().trim().toLowerCase();
 
-    public UsuarioResponseDTO crearUsuario(UsuarioRequestDTO request) {
-        if (usuarioRepository.findByEmailIgnoreCase(request.getEmail()).isPresent()) {
-            throw new RuntimeException("Ya existe un usuario con ese email");
+        if (usuarioRepository.existsByEmail(email)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ya existe un usuario con el email: " + email);
+        }
+
+        if (request.getCodigo() != null && !request.getCodigo().trim().isEmpty()) {
+            String codigo = request.getCodigo().trim();
+            if (usuarioRepository.existsByCodigo(codigo)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Ya existe un usuario con el código: " + codigo);
+            }
+        }
+
+        // Buscar rol por nombre
+        Rol rol = rolRepository.findByNombreIgnoreCase(request.getNombreRol())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Rol no encontrado: " + request.getNombreRol()));
+
+        if (!rol.getActivo()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "El rol está inactivo");
         }
 
         Usuario usuario = new Usuario();
-        usuario.setNombre(request.getNombre());
-        usuario.setEmail(request.getEmail());
-        usuario.setPassword(passwordEncoder.encode(request.getPassword()));
-        usuario.setCodigo(request.getCodigo());
-        usuario.setDepartamento(request.getDepartamento());
-        usuario.setPuesto(request.getPuesto());
+        usuario.setNombre(request.getNombre().trim());
+        usuario.setEmail(email);
+        usuario.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        usuario.setCodigo(request.getCodigo() != null ? request.getCodigo().trim() : null);
+        usuario.setRol(rol);
         usuario.setActivo(true);
 
-        Set<Rol> roles = request.getRoles().stream()
-                .map(nombre -> rolRepository.findByNombreIgnoreCase(nombre)
-                        .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + nombre)))
-                .collect(Collectors.toSet());
-
-        usuario.setRoles(roles);
         Usuario saved = usuarioRepository.save(usuario);
         return toDTO(saved);
     }
 
-    public UsuarioResponseDTO actualizarUsuario(String codigo, UsuarioRequestDTO request) {
-        Usuario usuario = usuarioRepository.findByCodigo(codigo)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con código: " + codigo));
+    // Actualizar usuario
+    @Transactional
+    public UsuarioResponseDTO actualizar(String email, UsuarioRequestDTO request) {
+        String emailActual = email.trim().toLowerCase();
+        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailActual)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Usuario no encontrado con email: " + emailActual));
 
-        usuario.setNombre(request.getNombre());
-        usuario.setDepartamento(request.getDepartamento());
-        usuario.setPuesto(request.getPuesto());
+        String nuevoEmail = request.getEmail().trim().toLowerCase();
 
-        if (request.getRoles() != null && !request.getRoles().isEmpty()) {
-            Set<Rol> roles = request.getRoles().stream()
-                    .map(nombre -> rolRepository.findByNombreIgnoreCase(nombre)
-                            .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + nombre)))
-                    .collect(Collectors.toSet());
-            usuario.setRoles(roles);
+        if (!usuario.getEmail().equals(nuevoEmail) && usuarioRepository.existsByEmail(nuevoEmail)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ya existe un usuario con el email: " + nuevoEmail);
+        }
+
+        if (request.getCodigo() != null && !request.getCodigo().trim().isEmpty()) {
+            String nuevoCodigo = request.getCodigo().trim();
+            if (!nuevoCodigo.equals(usuario.getCodigo()) && usuarioRepository.existsByCodigo(nuevoCodigo)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Ya existe un usuario con el código: " + nuevoCodigo);
+            }
+        }
+
+        // Buscar rol por nombre
+        Rol rol = rolRepository.findByNombreIgnoreCase(request.getNombreRol())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Rol no encontrado: " + request.getNombreRol()));
+
+        if (!rol.getActivo()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "El rol está inactivo");
+        }
+
+        usuario.setNombre(request.getNombre().trim());
+        usuario.setEmail(nuevoEmail);
+        usuario.setCodigo(request.getCodigo() != null ? request.getCodigo().trim() : null);
+        usuario.setRol(rol);
+
+        // Solo actualizar password si se proporciona uno nuevo
+        if (request.getPassword() != null && !request.getPassword().trim().isEmpty()) {
+            usuario.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         }
 
         Usuario updated = usuarioRepository.save(usuario);
         return toDTO(updated);
     }
 
-    public UsuarioResponseDTO desactivarUsuario(String email) {
-        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-        usuario.setActivo(false);
-        return toDTO(usuarioRepository.save(usuario));
-    }
+    // Activar usuario
+    @Transactional
+    public UsuarioResponseDTO activar(String email) {
+        String emailNormalizado = email.trim().toLowerCase();
+        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailNormalizado)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Usuario no encontrado con email: " + emailNormalizado));
 
-    public UsuarioResponseDTO activarUsuario(String email) {
-        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        if (usuario.getActivo()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "El usuario ya está activo");
+        }
+
         usuario.setActivo(true);
-        return toDTO(usuarioRepository.save(usuario));
+        Usuario updated = usuarioRepository.save(usuario);
+        return toDTO(updated);
     }
 
+    // Desactivar usuario
+    @Transactional
+    public UsuarioResponseDTO desactivar(String email) {
+        String emailNormalizado = email.trim().toLowerCase();
+        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailNormalizado)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Usuario no encontrado con email: " + emailNormalizado));
+
+        if (!usuario.getActivo()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "El usuario ya está inactivo");
+        }
+
+        usuario.setActivo(false);
+        Usuario updated = usuarioRepository.save(usuario);
+        return toDTO(updated);
+    }
+
+    // Cambiar contraseña
+    @Transactional
     public void cambiarPassword(String email, CambiarPasswordRequestDTO request) {
-        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        String emailNormalizado = email.trim().toLowerCase();
+        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailNormalizado)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Usuario no encontrado con email: " + emailNormalizado));
 
-        if (!passwordEncoder.matches(request.getPasswordActual(), usuario.getPassword())) {
-            throw new RuntimeException("Contraseña actual incorrecta");
+        if (!passwordEncoder.matches(request.getPasswordActual(), usuario.getPasswordHash())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "La contraseña actual es incorrecta");
         }
 
-        if (request.getNuevoPassword() == null || request.getNuevoPassword().length() < 6) {
-            throw new RuntimeException("La nueva contraseña debe tener al menos 6 caracteres");
-        }
-
-        usuario.setPassword(passwordEncoder.encode(request.getNuevoPassword()));
+        usuario.setPasswordHash(passwordEncoder.encode(request.getNuevoPassword()));
         usuarioRepository.save(usuario);
-    }
-
-    public UsuarioResponseDTO obtenerPorEmail(String email) {
-        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-        return toDTO(usuario);
-    }
-
-    public UsuarioResponseDTO obtenerPorCodigo(String codigo) {
-        Usuario usuario = usuarioRepository.findByCodigo(codigo)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con código: " + codigo));
-        return toDTO(usuario);
-    }
-
-    public List<UsuarioResponseDTO> buscarUsuarios(String nombre, String email, String departamento, String puesto) {
-        return usuarioRepository.buscarUsuarios(nombre, email, departamento, puesto)
-                .stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
-    }
-
-    public UsuarioResponseDTO cambiarRoles(String email, RolCambioRequestDTO request) {
-        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con email: " + email));
-
-        usuario.getRoles().clear();
-
-        for (String rolNombre : request.getRoles()) {
-            Rol rol = rolRepository.findByNombreIgnoreCase(rolNombre)
-                    .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + rolNombre));
-            usuario.getRoles().add(rol);
-        }
-
-        Usuario usuarioActualizado = usuarioRepository.save(usuario);
-        return toDTO(usuarioActualizado);
     }
 }

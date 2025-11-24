@@ -13,14 +13,24 @@ public class ProductoRequestDTO {
     @Size(max = 255, message = "El nombre no puede tener más de 255 caracteres")
     private String nombre;
 
-    @Size(max = 500, message = "La descripción no puede tener más de 500 caracteres")
+    @Size(max = 255, message = "La descripción no puede tener más de 255 caracteres")
     private String descripcion;
 
+    private String codigoCategoria; 
+
     @NotNull(message = "El precio es obligatorio")
-    @Positive(message = "El precio debe ser mayor a 0")
+    @DecimalMin(value = "0.0", inclusive = false, message = "El precio debe ser mayor a 0")
     private BigDecimal precio;
 
-    // Getters y Setters
+    @Min(value = 0, message = "El stock mínimo no puede ser negativo")
+    private Integer stockMinimo = 0;
+
+    @Min(value = 0, message = "El stock actual no puede ser negativo")
+    private Integer stockActual = 0;
+
+    @Size(max = 20, message = "La unidad de medida no puede tener más de 20 caracteres")
+    private String unidadMedida = "UNIDAD";
+
     public String getCodigo() {
         return codigo;
     }
@@ -45,11 +55,43 @@ public class ProductoRequestDTO {
         this.descripcion = descripcion;
     }
 
+    public String getCodigoCategoria() {
+        return codigoCategoria;
+    }
+
+    public void setCodigoCategoria(String codigoCategoria) {
+        this.codigoCategoria = codigoCategoria;
+    }
+
     public BigDecimal getPrecio() {
         return precio;
     }
 
     public void setPrecio(BigDecimal precio) {
         this.precio = precio;
+    }
+
+    public Integer getStockMinimo() {
+        return stockMinimo;
+    }
+
+    public void setStockMinimo(Integer stockMinimo) {
+        this.stockMinimo = stockMinimo;
+    }
+
+    public Integer getStockActual() {
+        return stockActual;
+    }
+
+    public void setStockActual(Integer stockActual) {
+        this.stockActual = stockActual;
+    }
+
+    public String getUnidadMedida() {
+        return unidadMedida;
+    }
+
+    public void setUnidadMedida(String unidadMedida) {
+        this.unidadMedida = unidadMedida;
     }
 }
