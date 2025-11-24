@@ -2,9 +2,7 @@ package com.ergpos.app.model;
 
 import jakarta.persistence.*;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-
 import java.time.LocalDateTime;
-import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -12,51 +10,43 @@ import java.util.UUID;
 public class Usuario {
 
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String nombre;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 255)
     private String email;
 
     @JsonIgnore
-    @Column(nullable = false)
-    private String password;
+    @Column(name = "password_hash", nullable = false, length = 255)
+    private String passwordHash;
 
     @Column(unique = true, length = 20)
     private String codigo;
 
-    private String departamento;
-    
-    private String puesto;
-    
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "rol_id", nullable = false)
+    private Rol rol;
+
     @Column(nullable = false)
     private Boolean activo = true;
-    
-    @Column(name = "created_at", updatable = false)
+
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-        name = "usuario_roles", 
-        joinColumns = @JoinColumn(name = "usuario_id"), 
-        inverseJoinColumns = @JoinColumn(name = "rol_id")
-    )
-    private Set<Rol> roles;
 
     @PrePersist
     public void prePersist() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        
+
         // Generar código automático si no se proporciona
-        if (this.codigo == null) {
-            this.codigo = "ERPOST" + System.currentTimeMillis();
+        if (this.codigo == null || this.codigo.isEmpty()) {
+            this.codigo = "ERPOS-" + System.currentTimeMillis();
         }
     }
 
@@ -90,12 +80,12 @@ public class Usuario {
         this.email = email;
     }
 
-    public String getPassword() {
-        return password;
+    public String getPasswordHash() {
+        return passwordHash;
     }
 
-    public void setPassword(String password) {
-        this.password = password;
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public String getCodigo() {
@@ -106,20 +96,12 @@ public class Usuario {
         this.codigo = codigo;
     }
 
-    public String getDepartamento() {
-        return departamento;
+    public Rol getRol() {
+        return rol;
     }
 
-    public void setDepartamento(String departamento) {
-        this.departamento = departamento;
-    }
-
-    public String getPuesto() {
-        return puesto;
-    }
-
-    public void setPuesto(String puesto) {
-        this.puesto = puesto;
+    public void setRol(Rol rol) {
+        this.rol = rol;
     }
 
     public Boolean getActivo() {
@@ -136,13 +118,5 @@ public class Usuario {
 
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
-    }
-
-    public Set<Rol> getRoles() {
-        return roles;
-    }
-
-    public void setRoles(Set<Rol> roles) {
-        this.roles = roles;
     }
 }

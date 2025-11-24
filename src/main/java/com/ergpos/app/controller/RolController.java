@@ -1,7 +1,10 @@
 package com.ergpos.app.controller;
 
 import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 import com.ergpos.app.dto.roles.RolRequestDTO;
 import com.ergpos.app.dto.roles.RolResponseDTO;
 import com.ergpos.app.service.RolService;
@@ -17,28 +20,43 @@ public class RolController {
         this.rolService = rolService;
     }
 
-    @GetMapping
-    public List<RolResponseDTO> listarActivos() {
-        return rolService.listarActivos();
-    }
-
-    @GetMapping("/inactivos")
-    public List<RolResponseDTO> listarInactivos() {
-        return rolService.listarInactivos();
-    }
-
+    // Crear rol
     @PostMapping
-    public RolResponseDTO crearRol(@RequestBody RolRequestDTO request) {
-        return rolService.crearRol(request);
+    public ResponseEntity<RolResponseDTO> crear(@Valid @RequestBody RolRequestDTO request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(rolService.crear(request));
     }
 
-    @PutMapping("/{nombre}/activar")
-    public RolResponseDTO activarRol(@PathVariable String nombre) {
-        return rolService.activarRol(nombre);
+    // Listar con filtros dinámicos (búsqueda por nombre y estado)
+    @GetMapping
+    public ResponseEntity<List<RolResponseDTO>> listar(
+            @RequestParam(required = false) String buscar,
+            @RequestParam(required = false) Boolean activo) {
+        return ResponseEntity.ok(rolService.listar(buscar, activo));
     }
 
-    @PutMapping("/{nombre}/desactivar")
-    public RolResponseDTO desactivarRol(@PathVariable String nombre) {
-        return rolService.desactivarRol(nombre);
+    // Obtener por nombre
+    @GetMapping("/{nombre}")
+    public ResponseEntity<RolResponseDTO> obtener(@PathVariable String nombre) {
+        return ResponseEntity.ok(rolService.obtenerPorNombre(nombre));
+    }
+
+    // Actualizar por nombre
+    @PutMapping("/{nombre}")
+    public ResponseEntity<RolResponseDTO> actualizar(
+            @PathVariable String nombre,
+            @Valid @RequestBody RolRequestDTO request) {
+        return ResponseEntity.ok(rolService.actualizar(nombre, request));
+    }
+
+    // Activar por nombre
+    @PatchMapping("/{nombre}/activar")
+    public ResponseEntity<RolResponseDTO> activar(@PathVariable String nombre) {
+        return ResponseEntity.ok(rolService.activar(nombre));
+    }
+
+    // Desactivar por nombre
+    @PatchMapping("/{nombre}/desactivar")
+    public ResponseEntity<RolResponseDTO> desactivar(@PathVariable String nombre) {
+        return ResponseEntity.ok(rolService.desactivar(nombre));
     }
 }

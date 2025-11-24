@@ -2,13 +2,12 @@ package com.ergpos.app.dto.usuarios;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
-import java.util.Set;
-
 public class UsuarioRequestDTO {
+
     @NotBlank(message = "El nombre es obligatorio")
+    @Size(max = 255, message = "El nombre no puede tener más de 255 caracteres")
     private String nombre;
 
     @NotBlank(message = "El email es obligatorio")
@@ -20,11 +19,9 @@ public class UsuarioRequestDTO {
     private String password;
 
     private String codigo;
-    private String departamento;
-    private String puesto;
 
-    @NotEmpty(message = "Al menos un rol es obligatorio")
-    private Set<String> roles;
+    @NotBlank(message = "El rol es obligatorio")
+    private String nombreRol;
 
     public String getNombre() {
         return nombre;
@@ -58,27 +55,11 @@ public class UsuarioRequestDTO {
         this.codigo = codigo;
     }
 
-    public String getDepartamento() {
-        return departamento;
+    public String getNombreRol() {
+        return nombreRol;
     }
 
-    public void setDepartamento(String departamento) {
-        this.departamento = departamento;
-    }
-
-    public String getPuesto() {
-        return puesto;
-    }
-
-    public void setPuesto(String puesto) {
-        this.puesto = puesto;
-    }
-
-    public Set<String> getRoles() {
-        return roles;
-    }
-
-    public void setRoles(Set<String> roles) {
-        this.roles = roles;
+    public void setNombreRol(String nombreRol) {
+        this.nombreRol = nombreRol;
     }
 }

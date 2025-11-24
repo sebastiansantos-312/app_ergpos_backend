@@ -1,48 +1,39 @@
-package com.ergpos.app.dto.usuarios;
+package com.ergpos.app.dto.categorias;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-public class UsuarioResponseDTO {
+public class CategoriaResponseDTO {
 
     private UUID id;
-    private String codigo;
     private String nombre;
-    private String email;
-    private String rol;
+    private String codigo; 
     private Boolean activo;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public UsuarioResponseDTO() {
+    // Constructor por defecto
+    public CategoriaResponseDTO() {
     }
 
-    public UsuarioResponseDTO(UUID id, String codigo, String nombre, String email,
-            String rol, Boolean activo, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    // Constructor con todos los campos
+    public CategoriaResponseDTO(UUID id, String nombre, String codigo, Boolean activo,
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
-        this.codigo = codigo;
         this.nombre = nombre;
-        this.email = email;
-        this.rol = rol;
+        this.codigo = codigo;
         this.activo = activo;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
 
+    // Getters & Setters
     public UUID getId() {
         return id;
     }
 
     public void setId(UUID id) {
         this.id = id;
-    }
-
-    public String getCodigo() {
-        return codigo;
-    }
-
-    public void setCodigo(String codigo) {
-        this.codigo = codigo;
     }
 
     public String getNombre() {
@@ -53,20 +44,12 @@ public class UsuarioResponseDTO {
         this.nombre = nombre;
     }
 
-    public String getEmail() {
-        return email;
+    public String getCodigo() {
+        return codigo;
     }
 
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getRol() {
-        return rol;
-    }
-
-    public void setRol(String rol) {
-        this.rol = rol;
+    public void setCodigo(String codigo) {
+        this.codigo = codigo;
     }
 
     public Boolean getActivo() {
@@ -91,5 +74,17 @@ public class UsuarioResponseDTO {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public String toString() {
+        return "CategoriaResponseDTO{" +
+                "id=" + id +
+                ", nombre='" + nombre + '\'' +
+                ", codigo='" + codigo + '\'' +
+                ", activo=" + activo +
+                ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
+                '}';
     }
 }

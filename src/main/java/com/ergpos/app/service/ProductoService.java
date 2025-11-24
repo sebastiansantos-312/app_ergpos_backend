@@ -1,131 +1,191 @@
 package com.ergpos.app.service;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
-
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
-
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import com.ergpos.app.dto.producto.ProductoRequestDTO;
 import com.ergpos.app.dto.producto.ProductoResponseDTO;
+import com.ergpos.app.model.Categoria;
 import com.ergpos.app.model.Producto;
+import com.ergpos.app.repository.CategoriaRepository;
 import com.ergpos.app.repository.ProductoRepository;
 
 @Service
+@Transactional(readOnly = true)
 public class ProductoService {
 
     private final ProductoRepository productoRepository;
+    private final CategoriaRepository categoriaRepository;
 
-    public ProductoService(ProductoRepository productoRepository) {
+    public ProductoService(ProductoRepository productoRepository, CategoriaRepository categoriaRepository) {
         this.productoRepository = productoRepository;
+        this.categoriaRepository = categoriaRepository;
     }
 
     private ProductoResponseDTO toDTO(Producto producto) {
         ProductoResponseDTO dto = new ProductoResponseDTO();
+        dto.setId(producto.getId());
         dto.setCodigo(producto.getCodigo());
         dto.setNombre(producto.getNombre());
         dto.setDescripcion(producto.getDescripcion());
+        dto.setCategoriaId(producto.getCategoria() != null ? producto.getCategoria().getId() : null);
+        dto.setCategoriaNombre(producto.getCategoria() != null ? producto.getCategoria().getNombre() : null);
         dto.setPrecio(producto.getPrecio());
+        dto.setStockMinimo(producto.getStockMinimo());
+        dto.setStockActual(producto.getStockActual());
+        dto.setUnidadMedida(producto.getUnidadMedida());
         dto.setActivo(producto.getActivo());
+        dto.setCreatedAt(producto.getCreatedAt());
+        dto.setUpdatedAt(producto.getUpdatedAt());
         return dto;
     }
 
-    public List<ProductoResponseDTO> listarProductos(Boolean activo) {
-
-        List<Producto> productos;
-
-        if (activo == null) {
-            productos = productoRepository.findAll();
-        } else if (activo) {
-            productos = productoRepository.findByActivoTrue();
-        } else {
-            productos = productoRepository.findByActivoFalse();
+    // Listar con búsqueda dinámica
+    public List<ProductoResponseDTO> listar(String buscar, String codigoCategoria, Boolean activo) {
+        // Buscar categoría por código si se proporciona
+        UUID categoriaId = null;
+        if (codigoCategoria != null && !codigoCategoria.trim().isEmpty()) {
+            Categoria categoria = categoriaRepository.findByCodigoIgnoreCase(codigoCategoria)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Categoría no encontrada"));
+            categoriaId = categoria.getId();
         }
 
-        return productos.stream().map(this::toDTO).collect(Collectors.toList());
+        return productoRepository.buscar(buscar, categoriaId, activo)
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
     }
 
-    public ProductoResponseDTO crearProducto(ProductoRequestDTO request) {
-        if (productoRepository.findByCodigo(request.getCodigo()).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Código de producto ya existe");
+    // Obtener por código
+    public ProductoResponseDTO obtener(String codigo) {
+        Producto producto = productoRepository.findByCodigo(codigo)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Producto no encontrado"));
+        return toDTO(producto);
+    }
+
+    // Crear producto
+    @Transactional
+    public ProductoResponseDTO crear(ProductoRequestDTO request) {
+        String codigo = request.getCodigo().trim();
+
+        if (productoRepository.existsByCodigo(codigo)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ya existe un producto con ese código");
+        }
+
+        Categoria categoria = null;
+        if (request.getCodigoCategoria() != null && !request.getCodigoCategoria().trim().isEmpty()) {
+            categoria = categoriaRepository.findByCodigoIgnoreCase(request.getCodigoCategoria())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Categoría no encontrada"));
+
+            if (!categoria.getActivo()) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "La categoría está inactiva");
+            }
         }
 
         Producto producto = new Producto();
-        producto.setCodigo(request.getCodigo());
-        producto.setNombre(request.getNombre());
-        producto.setDescripcion(request.getDescripcion());
+        producto.setCodigo(codigo);
+        producto.setNombre(request.getNombre().trim());
+        producto.setDescripcion(request.getDescripcion() != null ? request.getDescripcion().trim() : null);
+        producto.setCategoria(categoria);
         producto.setPrecio(request.getPrecio());
+        producto.setStockMinimo(request.getStockMinimo() != null ? request.getStockMinimo() : 0);
+        producto.setStockActual(request.getStockActual() != null ? request.getStockActual() : 0);
+        producto.setUnidadMedida(request.getUnidadMedida() != null ? request.getUnidadMedida() : "UNIDAD");
         producto.setActivo(true);
 
         return toDTO(productoRepository.save(producto));
     }
 
-    public ProductoResponseDTO cambiarEstadoProducto(String codigo, boolean activo) {
+    // Actualizar producto
+    @Transactional
+    public ProductoResponseDTO actualizar(String codigo, ProductoRequestDTO request) {
         Producto producto = productoRepository.findByCodigo(codigo)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Producto no encontrado"));
 
-        producto.setActivo(activo);
-        return toDTO(productoRepository.save(producto));
-    }
+        String nuevoCodigo = request.getCodigo().trim();
 
-    //NUEVOS MÉTODOS SUGERIDOS
-
-    public ProductoResponseDTO actualizarProducto(String codigo, ProductoRequestDTO request) {
-        Producto producto = productoRepository.findByCodigo(codigo)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
-
-        // Verificar si el nuevo código ya existe (y no es el mismo producto)
-        if (!codigo.equals(request.getCodigo()) &&
-                productoRepository.findByCodigo(request.getCodigo()).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El nuevo código ya existe");
+        if (!producto.getCodigo().equals(nuevoCodigo) && productoRepository.existsByCodigo(nuevoCodigo)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ya existe un producto con ese código");
         }
 
-        producto.setCodigo(request.getCodigo());
-        producto.setNombre(request.getNombre());
-        producto.setDescripcion(request.getDescripcion());
+        Categoria categoria = null;
+        if (request.getCodigoCategoria() != null && !request.getCodigoCategoria().trim().isEmpty()) {
+            categoria = categoriaRepository.findByCodigoIgnoreCase(request.getCodigoCategoria())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Categoría no encontrada"));
+
+            if (!categoria.getActivo()) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "La categoría está inactiva");
+            }
+        }
+
+        producto.setCodigo(nuevoCodigo);
+        producto.setNombre(request.getNombre().trim());
+        producto.setDescripcion(request.getDescripcion() != null ? request.getDescripcion().trim() : null);
+        producto.setCategoria(categoria);
         producto.setPrecio(request.getPrecio());
-        // Nota: No actualizamos 'activo' aquí, usa cambiarEstadoProducto para eso
+        producto.setStockMinimo(request.getStockMinimo() != null ? request.getStockMinimo() : 0);
+        producto.setStockActual(
+                request.getStockActual() != null ? request.getStockActual() : producto.getStockActual());
+        producto.setUnidadMedida(request.getUnidadMedida() != null ? request.getUnidadMedida() : "UNIDAD");
 
         return toDTO(productoRepository.save(producto));
     }
 
-    public ProductoResponseDTO buscarPorCodigo(String codigo) {
+    // Activar producto
+    @Transactional
+    public ProductoResponseDTO activar(String codigo) {
         Producto producto = productoRepository.findByCodigo(codigo)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
-        return toDTO(producto);
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Producto no encontrado"));
+
+        if (producto.getActivo()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "El producto ya está activo");
+        }
+
+        producto.setActivo(true);
+        return toDTO(productoRepository.save(producto));
     }
 
-    public List<ProductoResponseDTO> buscarPorNombre(String nombre) {
-        // Usamos el método que ya tienes en el repository
-        List<Producto> productos = productoRepository.findByNombreContainingIgnoreCaseAndActivoTrue(nombre);
-        return productos.stream().map(this::toDTO).collect(Collectors.toList());
-    }
+    // Desactivar producto
+    @Transactional
+    public ProductoResponseDTO desactivar(String codigo) {
+        Producto producto = productoRepository.findByCodigo(codigo)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Producto no encontrado"));
 
-    public Map<String, Object> obtenerEstadisticas() {
-        long totalProductos = productoRepository.count();
-        long productosActivos = productoRepository.findByActivoTrue().size();
-        long productosInactivos = productoRepository.findByActivoFalse().size();
+        if (!producto.getActivo()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "El producto ya está inactivo");
+        }
 
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("totalProductos", totalProductos);
-        stats.put("productosActivos", productosActivos);
-        stats.put("productosInactivos", productosInactivos);
-        stats.put("porcentajeActivos", totalProductos > 0 ? (productosActivos * 100.0 / totalProductos) : 0);
-
-        return stats;
-    }
-
-    public List<ProductoResponseDTO> productosRecientes() {
-        // Para este método necesitarías agregar el método en el repository
-        // Por ahora usamos una implementación simple
-        List<Producto> todosProductos = productoRepository.findAll();
-        return todosProductos.stream()
-                .sorted((p1, p2) -> p2.getCreatedAt().compareTo(p1.getCreatedAt()))
-                .limit(10)
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+        producto.setActivo(false);
+        return toDTO(productoRepository.save(producto));
     }
 }

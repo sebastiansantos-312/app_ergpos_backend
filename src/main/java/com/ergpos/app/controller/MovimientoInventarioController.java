@@ -1,15 +1,15 @@
 package com.ergpos.app.controller;
 
+import java.time.LocalDateTime;
 import java.util.List;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 import com.ergpos.app.dto.movimientos.MovimientoInventarioRequestDTO;
 import com.ergpos.app.dto.movimientos.MovimientoInventarioResponseDTO;
-import com.ergpos.app.model.Producto;
-import com.ergpos.app.repository.ProductoRepository;
 import com.ergpos.app.service.MovimientoInventarioService;
-import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/movimientos")
@@ -17,35 +17,47 @@ import jakarta.validation.Valid;
 public class MovimientoInventarioController {
 
         private final MovimientoInventarioService movimientoService;
-        private final ProductoRepository productoRepo;
 
-        public MovimientoInventarioController(MovimientoInventarioService movimientoService,
-                        ProductoRepository productoRepo) {
+        public MovimientoInventarioController(MovimientoInventarioService movimientoService) {
                 this.movimientoService = movimientoService;
-                this.productoRepo = productoRepo;
         }
 
+        // Crear movimiento (entrada o salida)
         @PostMapping
-        public MovimientoInventarioResponseDTO registrarMovimiento(
+        public ResponseEntity<MovimientoInventarioResponseDTO> crear(
                         @Valid @RequestBody MovimientoInventarioRequestDTO request) {
-                return movimientoService.registrarMovimiento(request);
+                return ResponseEntity.status(HttpStatus.CREATED).body(movimientoService.crear(request));
         }
 
+        // Listar con filtros dinámicos
         @GetMapping
-        public List<MovimientoInventarioResponseDTO> listarTodos() {
-                return movimientoService.listarTodos();
+        public ResponseEntity<List<MovimientoInventarioResponseDTO>> listar(
+                        @RequestParam(required = false) String producto,
+                        @RequestParam(required = false) String tipo,
+                        @RequestParam(required = false) String estado,
+                        @RequestParam(required = false) String usuario,
+                        @RequestParam(required = false) String proveedor,
+                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime desde,
+                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime hasta) {
+                return ResponseEntity
+                                .ok(movimientoService.listar(producto, tipo, estado, usuario, proveedor, desde, hasta));
         }
 
-        @GetMapping("/producto/{codigo}")
-        public List<MovimientoInventarioResponseDTO> listarPorProducto(@PathVariable String codigo) {
-                Producto producto = productoRepo.findByCodigo(codigo)
-                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                                "Producto no encontrado"));
+        // Obtener por ID
+        @GetMapping("/{id}")
+        public ResponseEntity<MovimientoInventarioResponseDTO> obtener(@PathVariable String id) {
+                return ResponseEntity.ok(movimientoService.obtener(id));
+        }
 
-                if (!producto.getActivo()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Producto inactivo");
-                }
+        // Anular movimiento (cambiar estado a ANULADO y revertir stock)
+        @PatchMapping("/{id}/anular")
+        public ResponseEntity<MovimientoInventarioResponseDTO> anular(@PathVariable String id) {
+                return ResponseEntity.ok(movimientoService.anular(id));
+        }
 
-                return movimientoService.listarPorProducto(producto);
+        // Activar movimiento (solo si está PENDIENTE)
+        @PatchMapping("/{id}/activar")
+        public ResponseEntity<MovimientoInventarioResponseDTO> activar(@PathVariable String id) {
+                return ResponseEntity.ok(movimientoService.activar(id));
         }
 }
