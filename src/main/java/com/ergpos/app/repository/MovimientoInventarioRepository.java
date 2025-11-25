@@ -1,6 +1,5 @@
 package com.ergpos.app.repository;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,8 +21,6 @@ public interface MovimientoInventarioRepository extends JpaRepository<Movimiento
                         AND (:estado IS NULL OR m.estado = :estado)
                         AND (:usuarioId IS NULL OR m.usuario.id = :usuarioId)
                         AND (:proveedorId IS NULL OR m.proveedor.id = :proveedorId)
-                        AND m.fecha >= :desde
-                        AND m.fecha <= :hasta
                         ORDER BY m.fecha DESC
                         """)
         List<MovimientoInventario> buscarMovimientos(
@@ -31,7 +28,5 @@ public interface MovimientoInventarioRepository extends JpaRepository<Movimiento
                         @Param("tipo") TipoMovimiento tipo,
                         @Param("estado") EstadoMovimiento estado,
                         @Param("usuarioId") UUID usuarioId,
-                        @Param("proveedorId") UUID proveedorId,
-                        @Param("desde") LocalDateTime desde,
-                        @Param("hasta") LocalDateTime hasta);
+                        @Param("proveedorId") UUID proveedorId);
 }

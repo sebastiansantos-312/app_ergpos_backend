@@ -111,7 +111,7 @@ public class AuthController {
             }
 
             String token = authHeader.substring(7);
-            
+
             if (!jwtUtils.validateJwtToken(token)) {
                 return ResponseEntity.badRequest().body("Token inválido");
             }
@@ -128,7 +128,7 @@ public class AuthController {
 
             // Obtener módulos según rol
             List<String> modules = getModulesByRole(usuario.getRol().getNombre());
-            
+
             return ResponseEntity.ok(modules);
 
         } catch (Exception e) {
@@ -138,16 +138,16 @@ public class AuthController {
 
     private List<String> getModulesByRole(String rolNombre) {
         List<String> modules = new ArrayList<>();
-        
-        switch(rolNombre.toUpperCase()) {
-            //"reportes",  "auditoria" no es ta disponible aun en el frontend
+
+        switch (rolNombre.toUpperCase()) {
+            // "reportes",no es ta disponible aun en el frontend
             case "ADMINISTRADOR":
-                modules.addAll(Arrays.asList("dashboard", "usuarios", "roles", "productos", 
-                                           "categorias", "proveedores", "movimientos"));
+                modules.addAll(Arrays.asList("dashboard", "usuarios", "roles", "productos",
+                        "categorias", "proveedores", "movimientos"));
                 break;
             case "SUPERVISOR":
-                modules.addAll(Arrays.asList("dashboard", "productos", "categorias", 
-                                           "proveedores"));
+                modules.addAll(Arrays.asList("dashboard", "productos", "categorias",
+                        "proveedores"));
                 break;
             case "OPERADOR":
                 modules.addAll(Arrays.asList("dashboard", "productos"));
@@ -155,7 +155,7 @@ public class AuthController {
             default:
                 modules.add("dashboard");
         }
-        
+
         return modules;
     }
 
@@ -168,7 +168,7 @@ public class AuthController {
             }
 
             String token = authHeader.substring(7);
-            
+
             if (!jwtUtils.validateJwtToken(token)) {
                 return ResponseEntity.badRequest().body("Token inválido");
             }
