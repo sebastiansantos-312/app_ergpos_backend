@@ -135,7 +135,7 @@ public class MovimientoInventarioService {
         }
 
         return movimientoRepo.buscarMovimientos(
-                productoId, tipo, estado, usuarioId, proveedorId, desde, hasta)
+                productoId, tipo, estado, usuarioId, proveedorId)
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
