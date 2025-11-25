@@ -42,47 +42,31 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ← AGREGA ESTA LÍNEA
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
                         // Endpoints públicos
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
 
-                        // Endpoints que requieren autenticación
-                        .requestMatchers("/api/usuarios/**").authenticated()
-                        .requestMatchers("/api/roles/**").authenticated()
-                        .requestMatchers("/api/productos/**").authenticated()
-                        .requestMatchers("/api/categorias/**").authenticated()
-                        .requestMatchers("/api/proveedores/**").authenticated()
-                        .requestMatchers("/api/movimientos/**").authenticated()
-                        .requestMatchers("/api/auditoria/**").authenticated()
-
-                        // Por defecto, permitir todo (para desarrollo)
-                        .anyRequest().permitAll())
+                        // Todo lo demás requiere autenticación
+                        .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    // ← AGREGA ESTE MÉTODO COMPLETO
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Permitir todos los orígenes (en desarrollo)
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowedOriginPatterns(List.of(
+                "https://app-ergpos.vercel.app",
+                "http://localhost:3000"));
 
-        // Métodos HTTP permitidos
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-
-        // Headers permitidos
         configuration.setAllowedHeaders(List.of("*"));
-
-        // Permitir credenciales
         configuration.setAllowCredentials(true);
-
-        // Headers expuestos
         configuration.setExposedHeaders(List.of("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
