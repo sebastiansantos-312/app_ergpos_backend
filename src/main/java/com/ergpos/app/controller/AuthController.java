@@ -102,7 +102,6 @@ public class AuthController {
         }
     }
 
-    // 🔥 NUEVO ENDPOINT - Obtener módulos por rol
     @GetMapping("/modules")
     public ResponseEntity<?> getUserModules(@RequestHeader("Authorization") String authHeader) {
         try {
@@ -137,21 +136,21 @@ public class AuthController {
         }
     }
 
-    // 🔥 MÉTODO PRIVADO - Lógica de módulos por rol
     private List<String> getModulesByRole(String rolNombre) {
         List<String> modules = new ArrayList<>();
         
         switch(rolNombre.toUpperCase()) {
+            //"reportes",  "auditoria" no es ta disponible aun en el frontend
             case "ADMINISTRADOR":
                 modules.addAll(Arrays.asList("dashboard", "usuarios", "roles", "productos", 
-                                           "categorias", "proveedores", "movimientos", "reportes", "auditoria"));
+                                           "categorias", "proveedores", "movimientos"));
                 break;
             case "SUPERVISOR":
                 modules.addAll(Arrays.asList("dashboard", "productos", "categorias", 
-                                           "proveedores", "movimientos", "reportes"));
+                                           "proveedores"));
                 break;
             case "OPERADOR":
-                modules.addAll(Arrays.asList("dashboard", "movimientos", "productos", "categorias", "proveedores"));
+                modules.addAll(Arrays.asList("dashboard", "productos"));
                 break;
             default:
                 modules.add("dashboard");
