@@ -142,7 +142,7 @@ public class AuthController {
         switch (rolNombre.toUpperCase()) {
             // "reportes",no es ta disponible aun en el frontend
             case "ADMINISTRADOR":
-                modules.addAll(Arrays.asList("dashboard", "usuarios", "roles", "productos",
+                modules.addAll(Arrays.asList("dashboard", "usuarios", "roles", "productos","auditoria",
                         "categorias", "proveedores", "movimientos"));
                 break;
             case "SUPERVISOR":
