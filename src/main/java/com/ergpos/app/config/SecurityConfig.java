@@ -60,7 +60,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOriginPatterns(List.of(
-                "https://app-ergpos.vercel.app",
+                "https://app-ergpos.vercel.app/",
                 "http://localhost:5173"
         ));
 
