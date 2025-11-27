@@ -44,9 +44,11 @@ public class Usuario {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
 
-        // Generar código automático si no se proporciona
         if (this.codigo == null || this.codigo.isEmpty()) {
-            this.codigo = "ERPOS-" + System.currentTimeMillis();
+            // ERGSYSTEM (9 caracteres) + 6 dígitos = 15 caracteres total
+            String timestamp = String.valueOf(System.currentTimeMillis());
+            String shortTimestamp = timestamp.substring(timestamp.length() - 6);
+            this.codigo = "ERGSYSTEM" + shortTimestamp; // Ejemplo: "ERGSYSTEM384729"
         }
     }
 
