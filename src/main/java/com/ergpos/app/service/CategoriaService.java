@@ -13,7 +13,6 @@ import com.ergpos.app.model.Categoria;
 import com.ergpos.app.repository.CategoriaRepository;
 
 @Service
-@Transactional(readOnly = true)
 public class CategoriaService {
 
     private final CategoriaRepository categoriaRepository;
@@ -66,6 +65,7 @@ public class CategoriaService {
     }
 
     // Obtener por ID, Código o Nombre
+    @Transactional(readOnly = true)
     public CategoriaResponseDTO obtener(String identificador) {
         return toDTO(buscarCategoria(identificador));
     }

@@ -1,5 +1,7 @@
 package com.ergpos.app.security;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
@@ -18,6 +20,7 @@ import java.util.Optional;
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
 
+    private static final Logger logger = LoggerFactory.getLogger(UserDetailsServiceImpl.class);
     private final UsuarioRepository usuarioRepository;
 
     public UserDetailsServiceImpl(UsuarioRepository usuarioRepository) {
@@ -36,21 +39,29 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         }
 
         Usuario usuario = usuarioOpt
-                .orElseThrow(() -> new UsernameNotFoundException(
-                        "Usuario no encontrado con email/código: " + username));
+                .orElseThrow(() -> {
+                    logger.warn("Intento de login fallido - Usuario no encontrado: {}", username);
+                    return new UsernameNotFoundException("Usuario no encontrado");
+                });
 
+        //Manejo consistente de usuarios inactivos
         if (!usuario.getActivo()) {
-            throw new UsernameNotFoundException("El usuario está inactivo: " + username);
+            logger.warn("Intento de login fallido - Usuario inactivo: {}", username);
+            throw new UsernameNotFoundException("Credenciales inválidas");
+            // NOTA: Se mantiene mensaje genérico por seguridad
         }
 
         // Verificar que el usuario tenga un rol asignado
         if (usuario.getRol() == null) {
-            throw new UsernameNotFoundException("El usuario no tiene un rol asignado: " + username);
+            logger.error("Usuario sin rol asignado: {}", username);
+            throw new UsernameNotFoundException("Configuración de usuario incompleta");
         }
 
         // Crear authorities basado en el rol del usuario
         List<GrantedAuthority> authorities = Collections.singletonList(
                 new SimpleGrantedAuthority("ROLE_" + usuario.getRol().getNombre().toUpperCase()));
+
+        logger.info("Login exitoso para usuario: {}", username);
 
         return new User(
                 usuario.getEmail(), // Usamos email como username principal
@@ -65,6 +76,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     // Método adicional para cargar por email (opcional)
     @Transactional(readOnly = true)
     public UserDetails loadUserByEmail(String email) throws UsernameNotFoundException {
+        logger.debug("Cargando usuario por email: {}", email);
         Usuario usuario = usuarioRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "Usuario no encontrado con email: " + email));
@@ -75,6 +87,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     // Método adicional para cargar por código (opcional)
     @Transactional(readOnly = true)
     public UserDetails loadUserByCodigo(String codigo) throws UsernameNotFoundException {
+        logger.debug("Cargando usuario por código: {}", codigo);
         Usuario usuario = usuarioRepository.findByCodigo(codigo)
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "Usuario no encontrado con código: " + codigo));
@@ -84,8 +97,9 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
     // Método helper para crear UserDetails
     private UserDetails createUserDetails(Usuario usuario) {
+        // Mensaje genérico para usuarios inactivos (seguridad)
         if (!usuario.getActivo()) {
-            throw new UsernameNotFoundException("El usuario está inactivo");
+            throw new UsernameNotFoundException("Credenciales inválidas");
         }
 
         if (usuario.getRol() == null) {

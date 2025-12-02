@@ -1,5 +1,6 @@
 package com.ergpos.app.model;
 
+import com.ergpos.app.util.StringUtils;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -32,7 +33,7 @@ public class Categoria {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
 
-        // ✅ GENERAR CÓDIGO AUTOMÁTICO SI NO SE PROPORCIONA
+        // Generar código automático si no se proporciona
         if (this.codigo == null || this.codigo.trim().isEmpty()) {
             generarCodigoAutomatico();
         }
@@ -43,35 +44,11 @@ public class Categoria {
         updatedAt = LocalDateTime.now();
     }
 
-    // ✅ MÉTODO PARA GENERAR CÓDIGO AUTOMÁTICO
+    /**
+     * Genera un código automático basado en el nombre
+     */
     private void generarCodigoAutomatico() {
-        if (this.nombre != null && !this.nombre.trim().isEmpty()) {
-            String codigoBase = this.nombre.toUpperCase()
-                    .trim()
-                    .replace(" ", "_")
-                    .replace("Á", "A")
-                    .replace("É", "E")
-                    .replace("Í", "I")
-                    .replace("Ó", "O")
-                    .replace("Ú", "U")
-                    .replace("Ñ", "N")
-                    .replaceAll("[^A-Z0-9_]", ""); // Solo letras, números y _
-
-            // Si el código base está vacío, usar UUID
-            if (codigoBase.isEmpty()) {
-                this.codigo = "CAT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-            } else {
-                this.codigo = "CAT-" + codigoBase;
-            }
-        } else {
-            // Fallback si no hay nombre
-            this.codigo = "CAT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        }
-
-        // Asegurar que no exceda 50 caracteres
-        if (this.codigo.length() > 50) {
-            this.codigo = this.codigo.substring(0, 50);
-        }
+        this.codigo = StringUtils.generateCode("CAT", this.nombre, 50);
     }
 
     // Getters & Setters
@@ -89,7 +66,7 @@ public class Categoria {
 
     public void setNombre(String nombre) {
         this.nombre = nombre;
-        // Si el código no se ha establecido manualmente, generarlo
+        // Regenerar código solo si aún no se ha establecido manualmente
         if (this.codigo == null || this.codigo.startsWith("CAT-")) {
             generarCodigoAutomatico();
         }
@@ -103,17 +80,14 @@ public class Categoria {
         this.activo = activo;
     }
 
-    // ✅ GETTER Y SETTER PARA CÓDIGO
     public String getCodigo() {
         return codigo;
     }
 
     public void setCodigo(String codigo) {
-        // Solo establecer código si no es nulo o vacío
         if (codigo != null && !codigo.trim().isEmpty()) {
             this.codigo = codigo.trim().toUpperCase();
         }
-        // Si se pasa null o vacío, se generará automáticamente en prePersist
     }
 
     public LocalDateTime getCreatedAt() {
@@ -122,5 +96,15 @@ public class Categoria {
 
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    @Override
+    public String toString() {
+        return "Categoria{" +
+                "id=" + id +
+                ", nombre='" + nombre + '\'' +
+                ", codigo='" + codigo + '\'' +
+                ", activo=" + activo +
+                '}';
     }
 }
