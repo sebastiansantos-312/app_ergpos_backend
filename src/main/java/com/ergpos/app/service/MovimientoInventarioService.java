@@ -1,25 +1,28 @@
+
 package com.ergpos.app.service;
+import com.ergpos.app.model.Producto;
+
+import java.util.UUID;
+
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import com.ergpos.app.dto.movimientos.MovimientoInventarioRequestDTO;
 import com.ergpos.app.dto.movimientos.MovimientoInventarioResponseDTO;
 import com.ergpos.app.model.MovimientoInventario;
 import com.ergpos.app.model.MovimientoInventario.TipoMovimiento;
 import com.ergpos.app.model.MovimientoInventario.EstadoMovimiento;
-import com.ergpos.app.model.Producto;
 import com.ergpos.app.model.Proveedor;
 import com.ergpos.app.model.Usuario;
 import com.ergpos.app.repository.MovimientoInventarioRepository;
 import com.ergpos.app.repository.ProductoRepository;
 import com.ergpos.app.repository.ProveedorRepository;
 import com.ergpos.app.repository.UsuarioRepository;
+import com.ergpos.app.exception.StockInsufficiencyException;
+import com.ergpos.app.exception.BusinessException;
 
 @Service
 @Transactional(readOnly = true)
@@ -29,16 +32,19 @@ public class MovimientoInventarioService {
     private final ProductoRepository productoRepo;
     private final ProveedorRepository proveedorRepo;
     private final UsuarioRepository usuarioRepo;
+    private final InventarioAuditService auditService;
 
     public MovimientoInventarioService(
             MovimientoInventarioRepository movimientoRepo,
             ProductoRepository productoRepo,
             ProveedorRepository proveedorRepo,
-            UsuarioRepository usuarioRepo) {
+            UsuarioRepository usuarioRepo,
+            InventarioAuditService auditService) {
         this.movimientoRepo = movimientoRepo;
         this.productoRepo = productoRepo;
         this.proveedorRepo = proveedorRepo;
         this.usuarioRepo = usuarioRepo;
+        this.auditService = auditService;
     }
 
     private MovimientoInventarioResponseDTO toDTO(MovimientoInventario mov) {
@@ -69,7 +75,6 @@ public class MovimientoInventarioService {
             LocalDateTime desde,
             LocalDateTime hasta) {
 
-        // Fechas por defecto si no se especifican
         if (desde == null) {
             desde = LocalDateTime.now().minusYears(1);
         }
@@ -78,20 +83,21 @@ public class MovimientoInventarioService {
         }
 
         if (desde.isAfter(hasta)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "La fecha inicial no puede ser mayor a la fecha final");
+            throw new BusinessException(
+                    "INVALID_DATE_RANGE",
+                    "La fecha inicial no puede ser mayor a la fecha final",
+                    400);
         }
 
-        // Convertir strings a enums
         TipoMovimiento tipo = null;
         if (tipoStr != null && !tipoStr.trim().isEmpty()) {
             try {
                 tipo = TipoMovimiento.valueOf(tipoStr.toUpperCase().trim());
             } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Tipo inválido. Debe ser ENTRADA o SALIDA");
+                throw new BusinessException(
+                        "INVALID_TIPO",
+                        "Tipo inválido. Debe ser ENTRADA o SALIDA",
+                        400);
             }
         }
 
@@ -100,37 +106,40 @@ public class MovimientoInventarioService {
             try {
                 estado = EstadoMovimiento.valueOf(estadoStr.toUpperCase().trim());
             } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Estado inválido. Debe ser ACTIVO, ANULADO o PENDIENTE");
+                throw new BusinessException(
+                        "INVALID_ESTADO",
+                        "Estado inválido. Debe ser ACTIVO, ANULADO o PENDIENTE",
+                        400);
             }
         }
 
-        // Buscar entidades por códigos
         UUID productoId = null;
         if (codigoProducto != null && !codigoProducto.trim().isEmpty()) {
             Producto producto = productoRepo.findByCodigo(codigoProducto)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND,
-                            "Producto no encontrado"));
+                    .orElseThrow(() -> new BusinessException(
+                            "PRODUCTO_NOT_FOUND",
+                            "Producto no encontrado",
+                            404));
             productoId = producto.getId();
         }
 
         UUID usuarioId = null;
         if (codigoUsuario != null && !codigoUsuario.trim().isEmpty()) {
             Usuario usuario = usuarioRepo.findByCodigo(codigoUsuario)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND,
-                            "Usuario no encontrado"));
+                    .orElseThrow(() -> new BusinessException(
+                            "USUARIO_NOT_FOUND",
+                            "Usuario no encontrado",
+                            404));
             usuarioId = usuario.getId();
         }
 
         UUID proveedorId = null;
         if (rucProveedor != null && !rucProveedor.trim().isEmpty()) {
             Proveedor proveedor = proveedorRepo.findByRuc(rucProveedor)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND,
-                            "Proveedor no encontrado"));
+                    .orElseThrow(() -> new BusinessException(
+                            "PROVEEDOR_NOT_FOUND",
+                            "Proveedor no encontrado",
+                            404));
             proveedorId = proveedor.getId();
         }
 
@@ -144,25 +153,29 @@ public class MovimientoInventarioService {
     // Obtener por ID
     public MovimientoInventarioResponseDTO obtener(String id) {
         MovimientoInventario movimiento = movimientoRepo.findById(UUID.fromString(id))
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Movimiento no encontrado"));
+                .orElseThrow(() -> new BusinessException(
+                        "MOVIMIENTO_NOT_FOUND",
+                        "Movimiento no encontrado",
+                        404));
         return toDTO(movimiento);
     }
 
-    // Crear movimiento
+    // CREAR MOVIMIENTO CON LOCKS PESSIMISTAS
     @Transactional
     public MovimientoInventarioResponseDTO crear(MovimientoInventarioRequestDTO request) {
-        // Validar producto
-        Producto producto = productoRepo.findByCodigo(request.getCodigoProducto())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Producto no encontrado"));
+
+        //LOCK PESSIMISTA: Obtener producto con lock
+        Producto producto = productoRepo.findByCodigoWithLock(request.getCodigoProducto())
+                .orElseThrow(() -> new BusinessException(
+                        "PRODUCTO_NOT_FOUND",
+                        "Producto no encontrado",
+                        404));
 
         if (!producto.getActivo()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "El producto está inactivo");
+            throw new BusinessException(
+                    "PRODUCTO_INACTIVE",
+                    "El producto está inactivo",
+                    400);
         }
 
         // Validar tipo
@@ -170,57 +183,62 @@ public class MovimientoInventarioService {
         try {
             tipo = TipoMovimiento.valueOf(request.getTipo().toUpperCase().trim());
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Tipo inválido. Debe ser ENTRADA o SALIDA");
+            throw new BusinessException(
+                    "INVALID_TIPO",
+                    "Tipo inválido. Debe ser ENTRADA o SALIDA",
+                    400);
         }
 
-        // Determinar estado inicial (ACTIVO por defecto, PENDIENTE si se especifica)
+        // Determinar estado inicial
         EstadoMovimiento estadoInicial = EstadoMovimiento.ACTIVO;
         if (request.getEstado() != null && !request.getEstado().trim().isEmpty()) {
             try {
                 estadoInicial = EstadoMovimiento.valueOf(request.getEstado().toUpperCase().trim());
             } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Estado inválido. Debe ser ACTIVO, ANULADO o PENDIENTE");
+                throw new BusinessException(
+                        "INVALID_ESTADO",
+                        "Estado inválido. Debe ser ACTIVO, ANULADO o PENDIENTE",
+                        400);
             }
         }
 
-        // Validar stock para salidas (solo si el movimiento será ACTIVO inmediatamente)
+        // VALIDACIÓN BAJO LOCK: Validar stock DENTRO de la transacción
         if (estadoInicial == EstadoMovimiento.ACTIVO && tipo == TipoMovimiento.SALIDA) {
             if (producto.getStockActual() < request.getCantidad()) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        String.format("Stock insuficiente. Disponible: %d, solicitado: %d",
-                                producto.getStockActual(), request.getCantidad()));
+                throw new StockInsufficiencyException(
+                        producto.getStockActual(),
+                        request.getCantidad());
             }
         }
 
         // Validar usuario
         Usuario usuario = usuarioRepo.findByCodigo(request.getCodigoUsuario())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Usuario no encontrado"));
+                .orElseThrow(() -> new BusinessException(
+                        "USUARIO_NOT_FOUND",
+                        "Usuario no encontrado",
+                        404));
 
         if (!usuario.getActivo()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "El usuario está inactivo");
+            throw new BusinessException(
+                    "USUARIO_INACTIVE",
+                    "El usuario está inactivo",
+                    400);
         }
 
         // Validar proveedor (opcional)
         Proveedor proveedor = null;
         if (request.getRucProveedor() != null && !request.getRucProveedor().trim().isEmpty()) {
             proveedor = proveedorRepo.findByRuc(request.getRucProveedor())
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND,
-                            "Proveedor no encontrado"));
+                    .orElseThrow(() -> new BusinessException(
+                            "PROVEEDOR_NOT_FOUND",
+                            "Proveedor no encontrado",
+                            404));
 
             if (!proveedor.getActivo()) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "El proveedor está inactivo");
+                throw new BusinessException(
+                        "PROVEEDOR_INACTIVE",
+                        "El proveedor está inactivo",
+                        400);
             }
         }
 
@@ -237,7 +255,7 @@ public class MovimientoInventarioService {
         movimiento.setFecha(LocalDateTime.now());
         movimiento.setEstado(estadoInicial);
 
-        // Actualizar stock del producto solo si el movimiento está ACTIVO
+        // Actualizar stock BAJO LOCK (dentro de transacción)
         if (estadoInicial == EstadoMovimiento.ACTIVO) {
             if (tipo == TipoMovimiento.ENTRADA) {
                 producto.setStockActual(producto.getStockActual() + request.getCantidad());
@@ -248,31 +266,52 @@ public class MovimientoInventarioService {
         }
 
         MovimientoInventario saved = movimientoRepo.save(movimiento);
+
+        //REGISTRAR AUDITORÍA
+        auditService.registrarAuditoria(
+                "INSERT",
+                "movimientos_inventario",
+                saved.getId(),
+                usuario.getId(),
+                String.format("Movimiento %s: Producto %s, Cantidad %d",
+                        tipo.name(),
+                        producto.getNombre(),
+                        request.getCantidad()));
+
         return toDTO(saved);
     }
 
-    // Anular movimiento
+    // ANULAR MOVIMIENTO CON LOCKS
     @Transactional
     public MovimientoInventarioResponseDTO anular(String id) {
         MovimientoInventario movimiento = movimientoRepo.findById(UUID.fromString(id))
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Movimiento no encontrado"));
+                .orElseThrow(() -> new BusinessException(
+                        "MOVIMIENTO_NOT_FOUND",
+                        "Movimiento no encontrado",
+                        404));
 
         if (movimiento.getEstado() != EstadoMovimiento.ACTIVO) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Solo se pueden anular movimientos ACTIVOS");
+            throw new BusinessException(
+                    "INVALID_MOVEMENT_STATE",
+                    "Solo se pueden anular movimientos ACTIVOS",
+                    400);
         }
 
-        // Revertir el stock
-        Producto producto = movimiento.getProducto();
+        //LOCK PESSIMISTA: Obtener producto con lock
+        Producto producto = productoRepo.findByIdWithLock(movimiento.getProducto().getId())
+                .orElseThrow(() -> new BusinessException(
+                        "PRODUCTO_NOT_FOUND",
+                        "Producto no encontrado",
+                        404));
+
+        // Revertir stock bajo lock
         if (movimiento.getTipo() == TipoMovimiento.ENTRADA) {
             int nuevoStock = producto.getStockActual() - movimiento.getCantidad();
             if (nuevoStock < 0) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "No se puede anular: el stock quedaría negativo");
+                throw new BusinessException(
+                        "NEGATIVE_STOCK",
+                        "No se puede anular: el stock quedaría negativo",
+                        400);
             }
             producto.setStockActual(nuevoStock);
         } else {
@@ -282,35 +321,53 @@ public class MovimientoInventarioService {
         movimiento.setEstado(EstadoMovimiento.ANULADO);
 
         productoRepo.save(producto);
-        return toDTO(movimientoRepo.save(movimiento));
+        MovimientoInventario updated = movimientoRepo.save(movimiento);
+
+        //REGISTRAR AUDITORÍA
+        auditService.registrarAuditoria(
+                "UPDATE",
+                "movimientos_inventario",
+                movimiento.getId(),
+                movimiento.getUsuario().getId(),
+                String.format("Movimiento anulado. Stock revertido de %d",
+                        movimiento.getCantidad()));
+
+        return toDTO(updated);
     }
 
-    // Activar movimiento (solo si está PENDIENTE)
+    // ACTIVAR MOVIMIENTO CON LOCKS
     @Transactional
     public MovimientoInventarioResponseDTO activar(String id) {
         MovimientoInventario movimiento = movimientoRepo.findById(UUID.fromString(id))
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Movimiento no encontrado"));
+                .orElseThrow(() -> new BusinessException(
+                        "MOVIMIENTO_NOT_FOUND",
+                        "Movimiento no encontrado",
+                        404));
 
         if (movimiento.getEstado() != EstadoMovimiento.PENDIENTE) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Solo se pueden activar movimientos PENDIENTES");
+            throw new BusinessException(
+                    "INVALID_MOVEMENT_STATE",
+                    "Solo se pueden activar movimientos PENDIENTES",
+                    400);
         }
 
-        // Validar stock para salidas
-        Producto producto = movimiento.getProducto();
+        // LOCK PESSIMISTA: Obtener producto con lock
+        Producto producto = productoRepo.findByIdWithLock(movimiento.getProducto().getId())
+                .orElseThrow(() -> new BusinessException(
+                        "PRODUCTO_NOT_FOUND",
+                        "Producto no encontrado",
+                        404));
+
+        // Validar stock para salidas (bajo lock)
         if (movimiento.getTipo() == TipoMovimiento.SALIDA) {
             if (producto.getStockActual() < movimiento.getCantidad()) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        String.format("Stock insuficiente. Disponible: %d, requerido: %d",
-                                producto.getStockActual(), movimiento.getCantidad()));
+                throw new StockInsufficiencyException(
+                        producto.getStockActual(),
+                        movimiento.getCantidad());
             }
         }
 
-        // Actualizar stock
+        // Actualizar stock bajo lock
         if (movimiento.getTipo() == TipoMovimiento.ENTRADA) {
             producto.setStockActual(producto.getStockActual() + movimiento.getCantidad());
         } else {
@@ -320,6 +377,18 @@ public class MovimientoInventarioService {
         movimiento.setEstado(EstadoMovimiento.ACTIVO);
 
         productoRepo.save(producto);
-        return toDTO(movimientoRepo.save(movimiento));
+        MovimientoInventario updated = movimientoRepo.save(movimiento);
+
+        // REGISTRAR AUDITORÍA
+        auditService.registrarAuditoria(
+                "UPDATE",
+                "movimientos_inventario",
+                movimiento.getId(),
+                movimiento.getUsuario().getId(),
+                String.format("Movimiento PENDIENTE activado. Stock actualizado %d %s",
+                        movimiento.getCantidad(),
+                        movimiento.getTipo().name()));
+
+        return toDTO(updated);
     }
 }

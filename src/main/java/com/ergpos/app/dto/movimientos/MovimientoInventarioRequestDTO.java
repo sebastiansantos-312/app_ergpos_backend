@@ -1,7 +1,6 @@
 package com.ergpos.app.dto.movimientos;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 
@@ -10,8 +9,6 @@ public class MovimientoInventarioRequestDTO {
     @NotBlank(message = "El código del producto es obligatorio")
     private String codigoProducto;
 
-    @NotNull(message = "La cantidad es obligatoria")
-    @Positive(message = "La cantidad debe ser mayor a 0")
     private Integer cantidad;
 
     @NotBlank(message = "El tipo es obligatorio")

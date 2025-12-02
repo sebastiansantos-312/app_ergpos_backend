@@ -1,15 +1,21 @@
 package com.ergpos.app.controller;
 
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.*;
+import com.ergpos.app.dto.auth.ErrorResponseDTO;
 import com.ergpos.app.dto.auth.LoginRequestDTO;
 import com.ergpos.app.dto.auth.LoginResponseDTO;
+import com.ergpos.app.exception.UnauthorizedException;
 import com.ergpos.app.model.Usuario;
 import com.ergpos.app.repository.UsuarioRepository;
 import com.ergpos.app.security.JwtUtils;
-
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
 import java.util.*;
 
 @RestController
@@ -17,6 +23,7 @@ import java.util.*;
 @CrossOrigin(origins = "*", maxAge = 3600)
 public class AuthController {
 
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
     private final JwtUtils jwtUtils;
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
@@ -30,34 +37,41 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequestDTO loginRequest) {
         try {
-            // Buscar usuario por email o código
-            Optional<Usuario> usuarioOpt = usuarioRepository.findByEmailIgnoreCase(loginRequest.getUsername());
+            String username = loginRequest.getUsername();
+            logger.debug("Intento de login para: {}", username);
 
-            // Si no encuentra por email, intentar por código
+            // Buscar usuario por email O código
+            Optional<Usuario> usuarioOpt = usuarioRepository.findByEmailIgnoreCase(username);
+
             if (usuarioOpt.isEmpty()) {
-                usuarioOpt = usuarioRepository.findByCodigo(loginRequest.getUsername());
+                usuarioOpt = usuarioRepository.findByCodigo(username);
             }
 
+            //Respuesta genérica si no existe
             if (usuarioOpt.isEmpty()) {
-                return ResponseEntity.badRequest().body("Error: Usuario no encontrado");
+                logger.warn("Login fallido - Usuario no encontrado: {}", username);
+                return buildErrorResponse("INVALID_CREDENTIALS", "Credenciales inválidas", HttpStatus.UNAUTHORIZED);
             }
 
             Usuario usuario = usuarioOpt.get();
 
-            // Verificar si el usuario está activo
-            if (!usuario.getActivo()) {
-                return ResponseEntity.badRequest().body("Error: Usuario inactivo");
+            // Verificar contraseña ANTES de revisar estado
+            if (!passwordEncoder.matches(loginRequest.getPassword(), usuario.getPasswordHash())) {
+                logger.warn("Login fallido - Contraseña incorrecta para: {}", username);
+                return buildErrorResponse("INVALID_CREDENTIALS", "Credenciales inválidas", HttpStatus.UNAUTHORIZED);
             }
 
-            // VERIFICAR CONTRASEÑA
-            if (!passwordEncoder.matches(loginRequest.getPassword(), usuario.getPasswordHash())) {
-                return ResponseEntity.badRequest().body("Error: Contraseña incorrecta");
+            //Mantener mensaje genérico para usuarios inactivos
+            if (!usuario.getActivo()) {
+                logger.warn("Login fallido - Usuario inactivo: {}", username);
+                return buildErrorResponse("INVALID_CREDENTIALS", "Credenciales inválidas", HttpStatus.UNAUTHORIZED);
             }
 
             // Generar token JWT
             String jwt = jwtUtils.generateTokenFromUsername(usuario.getEmail());
+            logger.info("Login exitoso para usuario: {}", username);
 
-            // Crear respuesta
+            // Respuesta MÍNIMA (sin información sensible)
             LoginResponseDTO response = new LoginResponseDTO(
                     jwt,
                     usuario.getId(),
@@ -70,115 +84,125 @@ public class AuthController {
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                    .body("Error: " + e.getMessage());
+            logger.error("Error en login: {}", e.getMessage(), e);
+            return buildErrorResponse("SERVER_ERROR", "Error interno del servidor", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
     @PostMapping("/logout")
     public ResponseEntity<?> logoutUser() {
-        return ResponseEntity.ok("Logout exitoso");
+        // NOTA: Con JWT stateless, el logout es principalmente frontend
+        // El frontend debe eliminar el token del localStorage
+        logger.info("Logout solicitado");
+        return ResponseEntity.ok(Map.of(
+                "message", "Logout exitoso",
+                "timestamp", LocalDateTime.now()));
     }
 
     @GetMapping("/validate")
     public ResponseEntity<?> validateToken() {
-        return ResponseEntity.ok("Endpoint de validación - funciona correctamente");
+        logger.debug("Validación de token solicitada");
+        return ResponseEntity.ok(Map.of(
+                "message", "Token válido",
+                "timestamp", LocalDateTime.now()));
     }
 
-    // Endpoint para verificar si el token es válido
     @PostMapping("/verify")
     public ResponseEntity<?> verifyToken(@RequestHeader("Authorization") String authHeader) {
         try {
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                String token = authHeader.substring(7);
-                if (jwtUtils.validateJwtToken(token)) {
-                    String username = jwtUtils.getUserNameFromJwtToken(token);
-                    return ResponseEntity.ok("Token válido para usuario: " + username);
-                }
+            logger.debug("Verificación de token solicitada");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return buildErrorResponse("INVALID_TOKEN_FORMAT", "Formato de token inválido", HttpStatus.BAD_REQUEST);
             }
-            return ResponseEntity.badRequest().body("Token inválido");
+
+            String token = authHeader.substring(7);
+
+            if (!jwtUtils.validateJwtToken(token)) {
+                return buildErrorResponse("INVALID_TOKEN", "Token inválido o expirado", HttpStatus.UNAUTHORIZED);
+            }
+
+            String username = jwtUtils.getUserNameFromJwtToken(token);
+            logger.debug("Token válido para usuario: {}", username);
+
+            return ResponseEntity.ok(Map.of(
+                    "valid", true,
+                    "username", username,
+                    "timestamp", LocalDateTime.now()));
+
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error verificando token");
+            logger.error("Error al verificar token: {}", e.getMessage(), e);
+            return buildErrorResponse("TOKEN_VERIFICATION_ERROR", "Error al verificar el token",
+                    HttpStatus.UNAUTHORIZED);
         }
     }
 
     @GetMapping("/modules")
     public ResponseEntity<?> getUserModules(@RequestHeader("Authorization") String authHeader) {
         try {
-            // Validar token
+            logger.debug("Obtención de módulos solicitada");
+
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return ResponseEntity.badRequest().body("Token no proporcionado");
+                return buildErrorResponse("INVALID_TOKEN_FORMAT", "Token no proporcionado", HttpStatus.BAD_REQUEST);
             }
 
             String token = authHeader.substring(7);
 
             if (!jwtUtils.validateJwtToken(token)) {
-                return ResponseEntity.badRequest().body("Token inválido");
+                return buildErrorResponse("INVALID_TOKEN", "Token inválido", HttpStatus.UNAUTHORIZED);
             }
 
-            // Obtener usuario desde token
             String username = jwtUtils.getUserNameFromJwtToken(token);
             Usuario usuario = usuarioRepository.findByEmailIgnoreCase(username)
-                    .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                    .or(() -> usuarioRepository.findByCodigo(username))
+                    .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
 
-            // Verificar que el usuario esté activo
+            //Manejo específico para usuarios desactivados DESPUÉS de
+            // autenticación
             if (!usuario.getActivo()) {
-                return ResponseEntity.badRequest().body("Usuario inactivo");
+                logger.warn("Usuario desactivado intentando acceder a módulos: {}", username);
+                return buildErrorResponse("ACCOUNT_DISABLED", "Tu cuenta ha sido desactivada", HttpStatus.FORBIDDEN);
             }
 
-            // Obtener módulos según rol
             List<String> modules = getModulesByRole(usuario.getRol().getNombre());
+            logger.debug("Módulos obtenidos para usuario {}: {}", username, modules);
 
-            return ResponseEntity.ok(modules);
+            return ResponseEntity.ok(Map.of(
+                    "modules", modules,
+                    "timestamp", LocalDateTime.now()));
 
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+            logger.error("Error al obtener módulos: {}", e.getMessage(), e);
+            return buildErrorResponse("SERVER_ERROR", e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
-    }
-
-    private List<String> getModulesByRole(String rolNombre) {
-        List<String> modules = new ArrayList<>();
-
-        switch (rolNombre.toUpperCase()) {
-            // "reportes",no es ta disponible aun en el frontend
-            case "ADMINISTRADOR":
-                modules.addAll(Arrays.asList("dashboard", "usuarios", "roles", "productos","auditoria",
-                        "categorias", "proveedores", "movimientos"));
-                break;
-            case "SUPERVISOR":
-                modules.addAll(Arrays.asList("dashboard", "productos", "categorias",
-                        "proveedores"));
-                break;
-            case "OPERADOR":
-                modules.addAll(Arrays.asList("dashboard", "productos"));
-                break;
-            default:
-                modules.add("dashboard");
-        }
-
-        return modules;
     }
 
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
         try {
-            // Validar token
+            logger.debug("Obtención de información de usuario solicitada");
+
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return ResponseEntity.badRequest().body("Token no proporcionado");
+                return buildErrorResponse("INVALID_TOKEN_FORMAT", "Token no proporcionado", HttpStatus.BAD_REQUEST);
             }
 
             String token = authHeader.substring(7);
 
             if (!jwtUtils.validateJwtToken(token)) {
-                return ResponseEntity.badRequest().body("Token inválido");
+                return buildErrorResponse("INVALID_TOKEN", "Token inválido", HttpStatus.UNAUTHORIZED);
             }
 
-            // Obtener usuario desde token
             String username = jwtUtils.getUserNameFromJwtToken(token);
             Usuario usuario = usuarioRepository.findByEmailIgnoreCase(username)
-                    .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                    .or(() -> usuarioRepository.findByCodigo(username))
+                    .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
 
-            // Crear respuesta con información del usuario
+            //Manejo específico para usuarios desactivados
+            if (!usuario.getActivo()) {
+                logger.warn("Usuario desactivado intentando acceder a información: {}", username);
+                return buildErrorResponse("ACCOUNT_DISABLED", "Tu cuenta ha sido desactivada", HttpStatus.FORBIDDEN);
+            }
+
             Map<String, Object> userInfo = new HashMap<>();
             userInfo.put("id", usuario.getId());
             userInfo.put("codigo", usuario.getCodigo());
@@ -187,11 +211,42 @@ public class AuthController {
             userInfo.put("rol", usuario.getRol() != null ? usuario.getRol().getNombre() : null);
             userInfo.put("activo", usuario.getActivo());
             userInfo.put("modules", getModulesByRole(usuario.getRol().getNombre()));
+            userInfo.put("timestamp", LocalDateTime.now());
 
+            logger.debug("Información de usuario obtenida: {}", username);
             return ResponseEntity.ok(userInfo);
 
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+            logger.error("Error al obtener información de usuario: {}", e.getMessage(), e);
+            return buildErrorResponse("SERVER_ERROR", e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private List<String> getModulesByRole(String rolNombre) {
+        List<String> modules = new ArrayList<>();
+
+        switch (rolNombre.toUpperCase()) {
+            case "ADMINISTRADOR":
+                modules.addAll(Arrays.asList("dashboard", "usuarios", "roles", "productos",
+                        "auditoria", "categorias", "proveedores", "movimientos", "reportes"));
+                break;
+            case "SUPERVISOR":
+                modules.addAll(Arrays.asList("dashboard", "productos", "categorias", "proveedores", "movimientos",
+                        "reportes"));
+                break;
+            case "OPERADOR":
+                modules.addAll(Arrays.asList("dashboard", "productos", "movimientos"));
+                break;
+            default:
+                modules.add("dashboard");
+        }
+
+        return modules;
+    }
+
+    //Método helper para construir respuestas de error consistentes
+    private ResponseEntity<ErrorResponseDTO> buildErrorResponse(String code, String message, HttpStatus status) {
+        ErrorResponseDTO error = new ErrorResponseDTO(code, message, status.value());
+        return ResponseEntity.status(status).body(error);
     }
 }

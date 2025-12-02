@@ -1,35 +1,29 @@
 package com.ergpos.app.repository;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import com.ergpos.app.model.Producto;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import com.ergpos.app.model.Producto;
+
+import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface ProductoRepository extends JpaRepository<Producto, UUID> {
+public interface ProductoRepository extends JpaRepository<Producto, UUID>, JpaSpecificationExecutor<Producto> {
 
-        // Búsqueda dinámica (por nombre, código o ambos)
-        @Query("""
-                        SELECT p FROM Producto p
-                        WHERE (:buscar IS NULL OR :buscar = '' OR
-                               LOWER(p.nombre) LIKE LOWER(CONCAT('%', :buscar, '%')) OR
-                               LOWER(p.codigo) LIKE LOWER(CONCAT('%', :buscar, '%')))
-                        AND (:categoriaId IS NULL OR p.categoria.id = :categoriaId)
-                        AND (:activo IS NULL OR p.activo = :activo)
-                        ORDER BY p.nombre ASC
-                        """)
-        List<Producto> buscar(
-                        @Param("buscar") String buscar,
-                        @Param("categoriaId") UUID categoriaId,
-                        @Param("activo") Boolean activo);
-
-        // Búsqueda por código
         Optional<Producto> findByCodigo(String codigo);
 
-        // Validación de existencia
         boolean existsByCodigo(String codigo);
+
+        @Query("SELECT p FROM Producto p WHERE p.id = :id")
+        @Lock(LockModeType.PESSIMISTIC_WRITE)
+        Optional<Producto> findByIdWithLock(@Param("id") UUID id);
+
+        @Query("SELECT p FROM Producto p WHERE p.codigo = :codigo")
+        @Lock(LockModeType.PESSIMISTIC_WRITE)
+        Optional<Producto> findByCodigoWithLock(@Param("codigo") String codigo);
 }
