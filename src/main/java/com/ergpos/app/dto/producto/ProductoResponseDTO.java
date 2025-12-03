@@ -11,6 +11,7 @@ public class ProductoResponseDTO {
     private String nombre;
     private String descripcion;
     private UUID categoriaId;
+    private String categoriaCodigo;
     private String categoriaNombre;
     private BigDecimal precio;
     private Integer stockMinimo;
@@ -123,4 +124,13 @@ public class ProductoResponseDTO {
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
+
+    public String getCategoriaCodigo() {
+        return categoriaCodigo;
+    }
+
+    public void setCategoriaCodigo(String categoriaCodigo) {
+        this.categoriaCodigo = categoriaCodigo;
+    }
+
 }

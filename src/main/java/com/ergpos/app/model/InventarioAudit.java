@@ -26,14 +26,16 @@ public class InventarioAudit {
     @Column(name = "usuario_id")
     private UUID usuarioId;
 
-    @Column(columnDefinition = "jsonb")
-    private String detalle;
+    @Column(name = "detalle", columnDefinition = "jsonb", nullable = false)
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    private String detalle = "{}"; // Valor por defecto: JSON vacío
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
     // Constructor por defecto
     public InventarioAudit() {
+        this.detalle = "{}"; // Asegurar valor por defecto
     }
 
     // Constructor para fácil creación
@@ -42,7 +44,13 @@ public class InventarioAudit {
         this.tablaNombre = tablaNombre;
         this.registroId = registroId;
         this.usuarioId = usuarioId;
-        this.detalle = detalle;
+        // Asegurar que detalle no sea null
+        this.detalle = (detalle != null && !detalle.trim().isEmpty()) ? detalle : "{}";
+    }
+
+    // Constructor alternativo sin detalle
+    public InventarioAudit(String eventoTipo, String tablaNombre, UUID registroId, UUID usuarioId) {
+        this(eventoTipo, tablaNombre, registroId, usuarioId, "{}");
     }
 
     // Getters & Setters
@@ -87,11 +95,13 @@ public class InventarioAudit {
     }
 
     public String getDetalle() {
-        return detalle;
+        // Asegurar que nunca devuelva null
+        return detalle != null ? detalle : "{}";
     }
 
     public void setDetalle(String detalle) {
-        this.detalle = detalle;
+        // Validar que no sea null
+        this.detalle = (detalle != null && !detalle.trim().isEmpty()) ? detalle : "{}";
     }
 
     public LocalDateTime getCreatedAt() {
@@ -101,6 +111,11 @@ public class InventarioAudit {
     // Método helper para crear detalle JSON desde objeto
     public void setDetalleFromObject(Object object) {
         try {
+            if (object == null) {
+                this.detalle = "{}";
+                return;
+            }
+
             ObjectMapper mapper = new ObjectMapper();
             this.detalle = mapper.writeValueAsString(object);
         } catch (JsonProcessingException e) {
@@ -114,6 +129,10 @@ public class InventarioAudit {
     public <T> T getDetalleAsObject(Class<T> valueType) {
         try {
             ObjectMapper mapper = new ObjectMapper();
+            // Asegurar que haya algo para deserializar
+            if (this.detalle == null || this.detalle.trim().isEmpty()) {
+                this.detalle = "{}";
+            }
             return mapper.readValue(this.detalle, valueType);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Error al deserializar JSON: " + e.getMessage(), e);

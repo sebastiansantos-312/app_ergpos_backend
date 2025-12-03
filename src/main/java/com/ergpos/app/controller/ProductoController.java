@@ -312,7 +312,32 @@ public class ProductoController {
         return ResponseEntity.ok(resultados);
     }
 
-    
+    // ✅ NUEVO: Obtener por código con query parameter
+    @GetMapping("/por-codigo")
+    public ResponseEntity<ProductoResponseDTO> obtenerPorQueryParam(@RequestParam String codigo) {
+        return ResponseEntity.ok(productoService.obtener(codigo));
+    }
+
+    // ✅ NUEVO: Actualizar con query parameter
+    @PutMapping
+    public ResponseEntity<ProductoResponseDTO> actualizarPorQueryParam(
+            @RequestParam String codigo,
+            @Valid @RequestBody ProductoRequestDTO request) {
+        return ResponseEntity.ok(productoService.actualizar(codigo, request));
+    }
+
+    // ✅ NUEVO: Activar con query parameter
+    @PatchMapping("/activar")
+    public ResponseEntity<ProductoResponseDTO> activarPorQueryParam(@RequestParam String codigo) {
+        return ResponseEntity.ok(productoService.activar(codigo));
+    }
+
+    // ✅ NUEVO: Desactivar con query parameter
+    @PatchMapping("/desactivar")
+    public ResponseEntity<ProductoResponseDTO> desactivarPorQueryParam(@RequestParam String codigo) {
+        return ResponseEntity.ok(productoService.desactivar(codigo));
+    }
+
     // Obtener dashboard de estadísticas
     @GetMapping("/dashboard")
     public ResponseEntity<Map<String, Object>> obtenerDashboard() {

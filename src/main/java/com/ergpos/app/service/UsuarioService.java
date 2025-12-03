@@ -2,22 +2,38 @@ package com.ergpos.app.service;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import org.springframework.http.HttpStatus;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
+
 import com.ergpos.app.dto.usuarios.CambiarPasswordRequestDTO;
 import com.ergpos.app.dto.usuarios.UsuarioRequestDTO;
 import com.ergpos.app.dto.usuarios.UsuarioResponseDTO;
+import com.ergpos.app.dto.usuarios.UsuarioUpdateRequestDTO;
+import com.ergpos.app.exception.DuplicateResourceException;
+import com.ergpos.app.exception.ResourceNotFoundException;
+import com.ergpos.app.exception.ValidationException;
 import com.ergpos.app.model.Rol;
 import com.ergpos.app.model.Usuario;
 import com.ergpos.app.repository.RolRepository;
 import com.ergpos.app.repository.UsuarioRepository;
+import com.ergpos.app.util.PasswordValidator;
+import com.ergpos.app.util.ValidationUtils;
 
+/**
+ * Servicio para gestión de usuarios.
+ * 
+ * Implementa operaciones CRUD y gestión de contraseñas con validaciones
+ * de negocio y manejo estandarizado de excepciones.
+ */
 @Service
 @Transactional(readOnly = true)
 public class UsuarioService {
+
+    private static final Logger logger = LoggerFactory.getLogger(UsuarioService.class);
 
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
@@ -45,176 +61,232 @@ public class UsuarioService {
         return dto;
     }
 
-    // Búsqueda dinámica con filtros
+    /**
+     * Lista usuarios con filtros opcionales.
+     */
     public List<UsuarioResponseDTO> listar(String nombre, String email, String rolNombre, Boolean activo) {
+        logger.debug("Listando usuarios - nombre: {}, email: {}, rol: {}, activo: {}",
+                nombre, email, rolNombre, activo);
+
         return usuarioRepository.buscarUsuarios(nombre, email, rolNombre, activo)
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
 
-    // Obtener por email
+    /**
+     * Obtiene un usuario por email.
+     */
     public UsuarioResponseDTO obtenerPorEmail(String email) {
-        String emailNormalizado = email.trim().toLowerCase();
+        String emailNormalizado = ValidationUtils.requireValidEmail(email, "email");
+
         Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailNormalizado)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Usuario no encontrado con email: " + emailNormalizado));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "email", emailNormalizado));
+
+        logger.debug("Usuario obtenido: {}", emailNormalizado);
         return toDTO(usuario);
     }
 
-    // Crear usuario
+    /**
+     * Crea un nuevo usuario.
+     */
     @Transactional
     public UsuarioResponseDTO crear(UsuarioRequestDTO request) {
-        String email = request.getEmail().trim().toLowerCase();
+        logger.info("Creando nuevo usuario con email: {}", request.getEmail());
 
-        if (usuarioRepository.existsByEmail(email)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ya existe un usuario con el email: " + email);
-        }
+        // Validaciones de entrada
+        String nombre = ValidationUtils.requireNonEmpty(request.getNombre(), "nombre");
+        ValidationUtils.requireMaxLength(nombre, "nombre", 255);
 
+        String email = ValidationUtils.requireValidEmail(request.getEmail(), "email");
+
+        String password = ValidationUtils.requireNonEmpty(request.getPassword(), "password");
+        PasswordValidator.validateBasic(password); // Usar validateBasic o validate según requisitos
+
+        String nombreRol = ValidationUtils.requireNonEmpty(request.getNombreRol(), "rol");
+
+        // Validar código si se proporciona
+        String codigo = null;
         if (request.getCodigo() != null && !request.getCodigo().trim().isEmpty()) {
-            String codigo = request.getCodigo().trim();
+            codigo = request.getCodigo().trim();
+            ValidationUtils.requireMaxLength(codigo, "código", 50);
+
             if (usuarioRepository.existsByCodigo(codigo)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Ya existe un usuario con el código: " + codigo);
+                throw new DuplicateResourceException("Usuario", "código", codigo);
             }
         }
 
-        // Buscar rol por nombre
-        Rol rol = rolRepository.findByNombreIgnoreCase(request.getNombreRol())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Rol no encontrado: " + request.getNombreRol()));
-
-        if (!rol.getActivo()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "El rol está inactivo");
+        // Verificar que el email no exista
+        if (usuarioRepository.existsByEmail(email)) {
+            throw new DuplicateResourceException("Usuario", "email", email);
         }
 
+        // Buscar y validar rol
+        Rol rol = rolRepository.findByNombreIgnoreCase(nombreRol)
+                .orElseThrow(() -> new ResourceNotFoundException("Rol", "nombre", nombreRol));
+
+        if (!rol.getActivo()) {
+            throw new ValidationException("INACTIVE_ROLE",
+                    "El rol '" + nombreRol + "' está inactivo");
+        }
+
+        // Crear usuario
         Usuario usuario = new Usuario();
-        usuario.setNombre(request.getNombre().trim());
+        usuario.setNombre(nombre);
         usuario.setEmail(email);
-        usuario.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        usuario.setCodigo(request.getCodigo() != null ? request.getCodigo().trim() : null);
+        usuario.setPasswordHash(passwordEncoder.encode(password));
+        usuario.setCodigo(codigo);
         usuario.setRol(rol);
         usuario.setActivo(true);
 
         Usuario saved = usuarioRepository.save(usuario);
+        logger.info("Usuario creado exitosamente: {}", email);
+
         return toDTO(saved);
     }
 
-    // Actualizar usuario
+    /**
+     * Actualiza un usuario existente.
+     */
     @Transactional
-    public UsuarioResponseDTO actualizar(String email, UsuarioRequestDTO request) {
-        String emailActual = email.trim().toLowerCase();
+    public UsuarioResponseDTO actualizar(String email, UsuarioUpdateRequestDTO request) {
+        String emailActual = ValidationUtils.requireValidEmail(email, "email actual");
+
+        logger.info("Actualizando usuario: {}", emailActual);
+
         Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailActual)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Usuario no encontrado con email: " + emailActual));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "email", emailActual));
 
-        String nuevoEmail = request.getEmail().trim().toLowerCase();
+        // Validar nuevos datos
+        String nuevoNombre = ValidationUtils.requireNonEmpty(request.getNombre(), "nombre");
+        ValidationUtils.requireMaxLength(nuevoNombre, "nombre", 255);
 
-        if (!usuario.getEmail().equals(nuevoEmail) && usuarioRepository.existsByEmail(nuevoEmail)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ya existe un usuario con el email: " + nuevoEmail);
-        }
+        String nuevoEmail = ValidationUtils.requireValidEmail(request.getEmail(), "email");
 
+        String nombreRol = ValidationUtils.requireNonEmpty(request.getNombreRol(), "rol");
+
+        // Validar código si se proporciona
+        String nuevoCodigo = null;
         if (request.getCodigo() != null && !request.getCodigo().trim().isEmpty()) {
-            String nuevoCodigo = request.getCodigo().trim();
-            if (!nuevoCodigo.equals(usuario.getCodigo()) && usuarioRepository.existsByCodigo(nuevoCodigo)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Ya existe un usuario con el código: " + nuevoCodigo);
+            nuevoCodigo = request.getCodigo().trim();
+            ValidationUtils.requireMaxLength(nuevoCodigo, "código", 50);
+
+            // Verificar duplicado solo si cambió
+            if (!nuevoCodigo.equals(usuario.getCodigo()) &&
+                    usuarioRepository.existsByCodigo(nuevoCodigo)) {
+                throw new DuplicateResourceException("Usuario", "código", nuevoCodigo);
             }
         }
 
-        // Buscar rol por nombre
-        Rol rol = rolRepository.findByNombreIgnoreCase(request.getNombreRol())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Rol no encontrado: " + request.getNombreRol()));
-
-        if (!rol.getActivo()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "El rol está inactivo");
+        // Verificar email duplicado solo si cambió
+        if (!usuario.getEmail().equals(nuevoEmail) &&
+                usuarioRepository.existsByEmail(nuevoEmail)) {
+            throw new DuplicateResourceException("Usuario", "email", nuevoEmail);
         }
 
-        usuario.setNombre(request.getNombre().trim());
+        // Buscar y validar rol
+        Rol rol = rolRepository.findByNombreIgnoreCase(nombreRol)
+                .orElseThrow(() -> new ResourceNotFoundException("Rol", "nombre", nombreRol));
+
+        if (!rol.getActivo()) {
+            throw new ValidationException("INACTIVE_ROLE",
+                    "El rol '" + nombreRol + "' está inactivo");
+        }
+
+        // Actualizar datos
+        usuario.setNombre(nuevoNombre);
         usuario.setEmail(nuevoEmail);
-        usuario.setCodigo(request.getCodigo() != null ? request.getCodigo().trim() : null);
+        usuario.setCodigo(nuevoCodigo);
         usuario.setRol(rol);
 
-        // Solo actualizar password si se proporciona uno nuevo
+        // Actualizar password solo si se proporciona
         if (request.getPassword() != null && !request.getPassword().trim().isEmpty()) {
-            usuario.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+            String newPassword = request.getPassword().trim();
+            PasswordValidator.validateBasic(newPassword);
+            usuario.setPasswordHash(passwordEncoder.encode(newPassword));
+            logger.info("Contraseña actualizada para usuario: {}", nuevoEmail);
         }
 
         Usuario updated = usuarioRepository.save(usuario);
+        logger.info("Usuario actualizado exitosamente: {}", nuevoEmail);
+
         return toDTO(updated);
     }
 
-    // Activar usuario
+    /**
+     * Activa un usuario.
+     */
     @Transactional
     public UsuarioResponseDTO activar(String email) {
-        String emailNormalizado = email.trim().toLowerCase();
+        String emailNormalizado = ValidationUtils.requireValidEmail(email, "email");
+
         Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailNormalizado)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Usuario no encontrado con email: " + emailNormalizado));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "email", emailNormalizado));
 
         if (usuario.getActivo()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "El usuario ya está activo");
+            throw new ValidationException("ALREADY_ACTIVE", "El usuario ya está activo");
         }
 
         usuario.setActivo(true);
         Usuario updated = usuarioRepository.save(usuario);
+
+        logger.info("Usuario activado: {}", emailNormalizado);
         return toDTO(updated);
     }
 
-    // Desactivar usuario
+    /**
+     * Desactiva un usuario.
+     */
     @Transactional
     public UsuarioResponseDTO desactivar(String email) {
-        String emailNormalizado = email.trim().toLowerCase();
+        String emailNormalizado = ValidationUtils.requireValidEmail(email, "email");
+
         Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailNormalizado)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Usuario no encontrado con email: " + emailNormalizado));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "email", emailNormalizado));
 
         if (!usuario.getActivo()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "El usuario ya está inactivo");
+            throw new ValidationException("ALREADY_INACTIVE", "El usuario ya está inactivo");
         }
 
         usuario.setActivo(false);
         Usuario updated = usuarioRepository.save(usuario);
+
+        logger.info("Usuario desactivado: {}", emailNormalizado);
         return toDTO(updated);
     }
 
-    // Cambiar contraseña
+    /**
+     * Cambia la contraseña de un usuario.
+     */
     @Transactional
     public void cambiarPassword(String email, CambiarPasswordRequestDTO request) {
-        String emailNormalizado = email.trim().toLowerCase();
-        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailNormalizado)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Usuario no encontrado con email: " + emailNormalizado));
+        String emailNormalizado = ValidationUtils.requireValidEmail(email, "email");
 
-        if (!passwordEncoder.matches(request.getPasswordActual(), usuario.getPasswordHash())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "La contraseña actual es incorrecta");
+        Usuario usuario = usuarioRepository.findByEmailIgnoreCase(emailNormalizado)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario", "email", emailNormalizado));
+
+        // Validar contraseña actual
+        String passwordActual = ValidationUtils.requireNonEmpty(
+                request.getPasswordActual(), "contraseña actual");
+
+        if (!passwordEncoder.matches(passwordActual, usuario.getPasswordHash())) {
+            throw new ValidationException("INVALID_PASSWORD", "La contraseña actual es incorrecta");
         }
 
-        usuario.setPasswordHash(passwordEncoder.encode(request.getNuevoPassword()));
+        // Validar nueva contraseña
+        String nuevoPassword = ValidationUtils.requireNonEmpty(
+                request.getNuevoPassword(), "nueva contraseña");
+        PasswordValidator.validateBasic(nuevoPassword);
+
+        // Verificar que la nueva contraseña sea diferente
+        if (passwordEncoder.matches(nuevoPassword, usuario.getPasswordHash())) {
+            throw new ValidationException("SAME_PASSWORD",
+                    "La nueva contraseña debe ser diferente a la actual");
+        }
+
+        usuario.setPasswordHash(passwordEncoder.encode(nuevoPassword));
         usuarioRepository.save(usuario);
+
+        logger.info("Contraseña cambiada para usuario: {}", emailNormalizado);
     }
 }
