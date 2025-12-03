@@ -56,6 +56,7 @@ public class ProductoService {
         dto.setDescripcion(producto.getDescripcion());
         dto.setCategoriaId(producto.getCategoria() != null ? producto.getCategoria().getId() : null);
         dto.setCategoriaNombre(producto.getCategoria() != null ? producto.getCategoria().getNombre() : null);
+        dto.setCategoriaCodigo(producto.getCategoria().getCodigo());
         dto.setPrecio(producto.getPrecio());
         dto.setStockMinimo(producto.getStockMinimo());
         dto.setStockActual(producto.getStockActual());

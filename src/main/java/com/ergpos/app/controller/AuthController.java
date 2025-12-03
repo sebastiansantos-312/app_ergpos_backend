@@ -7,6 +7,8 @@ import com.ergpos.app.exception.UnauthorizedException;
 import com.ergpos.app.model.Usuario;
 import com.ergpos.app.repository.UsuarioRepository;
 import com.ergpos.app.security.JwtUtils;
+import com.ergpos.app.security.LoginAttemptService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +20,9 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.*;
 
+/**
+ * Controlador de autenticación con rate limiting y logging mejorado.
+ */
 @RestController
 @RequestMapping("/api/auth")
 @CrossOrigin(origins = "*", maxAge = 3600)
@@ -27,18 +32,42 @@ public class AuthController {
     private final JwtUtils jwtUtils;
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
+    private final LoginAttemptService loginAttemptService;
 
-    public AuthController(JwtUtils jwtUtils, UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder) {
+    public AuthController(
+            JwtUtils jwtUtils,
+            UsuarioRepository usuarioRepository,
+            PasswordEncoder passwordEncoder,
+            LoginAttemptService loginAttemptService) {
         this.jwtUtils = jwtUtils;
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
+        this.loginAttemptService = loginAttemptService;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequestDTO loginRequest) {
+    public ResponseEntity<?> authenticateUser(
+            @Valid @RequestBody LoginRequestDTO loginRequest,
+            HttpServletRequest request) {
+
+        String clientIp = getClientIP(request);
+        String username = loginRequest.getUsername();
+
         try {
-            String username = loginRequest.getUsername();
-            logger.debug("Intento de login para: {}", username);
+            // Verificar si la IP está bloqueada por exceso de intentos
+            if (loginAttemptService.isBlocked(clientIp)) {
+                long remainingTime = loginAttemptService.getRemainingLockTime(clientIp);
+                logger.warn(
+                        "Login bloqueado por exceso de intentos - IP: {} - Usuario: {} - Tiempo restante: {} minutos",
+                        clientIp, username, remainingTime);
+
+                return buildErrorResponse(
+                        "TOO_MANY_ATTEMPTS",
+                        String.format("Demasiados intentos fallidos. Intenta nuevamente en %d minutos", remainingTime),
+                        HttpStatus.TOO_MANY_REQUESTS);
+            }
+
+            logger.debug("Intento de login - Usuario: {} - IP: {}", username, clientIp);
 
             // Buscar usuario por email O código
             Optional<Usuario> usuarioOpt = usuarioRepository.findByEmailIgnoreCase(username);
@@ -47,9 +76,10 @@ public class AuthController {
                 usuarioOpt = usuarioRepository.findByCodigo(username);
             }
 
-            //Respuesta genérica si no existe
+            // Respuesta genérica si no existe
             if (usuarioOpt.isEmpty()) {
-                logger.warn("Login fallido - Usuario no encontrado: {}", username);
+                loginAttemptService.loginFailed(clientIp);
+                logger.warn("Login fallido - Usuario no encontrado: {} - IP: {}", username, clientIp);
                 return buildErrorResponse("INVALID_CREDENTIALS", "Credenciales inválidas", HttpStatus.UNAUTHORIZED);
             }
 
@@ -57,19 +87,25 @@ public class AuthController {
 
             // Verificar contraseña ANTES de revisar estado
             if (!passwordEncoder.matches(loginRequest.getPassword(), usuario.getPasswordHash())) {
-                logger.warn("Login fallido - Contraseña incorrecta para: {}", username);
+                loginAttemptService.loginFailed(clientIp);
+                logger.warn("Login fallido - Contraseña incorrecta - Usuario: {} - IP: {}", username, clientIp);
                 return buildErrorResponse("INVALID_CREDENTIALS", "Credenciales inválidas", HttpStatus.UNAUTHORIZED);
             }
 
-            //Mantener mensaje genérico para usuarios inactivos
+            // Verificar si el usuario está activo
             if (!usuario.getActivo()) {
-                logger.warn("Login fallido - Usuario inactivo: {}", username);
-                return buildErrorResponse("INVALID_CREDENTIALS", "Credenciales inválidas", HttpStatus.UNAUTHORIZED);
+                loginAttemptService.loginFailed(clientIp);
+                logger.warn("Login fallido - Usuario inactivo: {} - IP: {}", username, clientIp);
+                return buildErrorResponse("USER_INACTIVE", "Tu cuenta está inactiva. Contacta al administrador.",
+                        HttpStatus.FORBIDDEN);
             }
+
+            // Login exitoso - limpiar intentos fallidos
+            loginAttemptService.loginSucceeded(clientIp);
 
             // Generar token JWT
             String jwt = jwtUtils.generateTokenFromUsername(usuario.getEmail());
-            logger.info("Login exitoso para usuario: {}", username);
+            logger.info("Login exitoso - Usuario: {} - IP: {}", username, clientIp);
 
             // Respuesta MÍNIMA (sin información sensible)
             LoginResponseDTO response = new LoginResponseDTO(
@@ -84,9 +120,20 @@ public class AuthController {
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            logger.error("Error en login: {}", e.getMessage(), e);
+            logger.error("Error en login - Usuario: {} - IP: {} - Error: {}", username, clientIp, e.getMessage(), e);
             return buildErrorResponse("SERVER_ERROR", "Error interno del servidor", HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Obtiene la IP del cliente, considerando proxies.
+     */
+    private String getClientIP(HttpServletRequest request) {
+        String xfHeader = request.getHeader("X-Forwarded-For");
+        if (xfHeader == null || xfHeader.isEmpty() || "unknown".equalsIgnoreCase(xfHeader)) {
+            return request.getRemoteAddr();
+        }
+        return xfHeader.split(",")[0];
     }
 
     @PostMapping("/logout")
@@ -157,8 +204,7 @@ public class AuthController {
                     .or(() -> usuarioRepository.findByCodigo(username))
                     .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
 
-            //Manejo específico para usuarios desactivados DESPUÉS de
-            // autenticación
+            // Manejo específico para usuarios desactivados DESPUÉS de autenticación
             if (!usuario.getActivo()) {
                 logger.warn("Usuario desactivado intentando acceder a módulos: {}", username);
                 return buildErrorResponse("ACCOUNT_DISABLED", "Tu cuenta ha sido desactivada", HttpStatus.FORBIDDEN);
@@ -197,7 +243,7 @@ public class AuthController {
                     .or(() -> usuarioRepository.findByCodigo(username))
                     .orElseThrow(() -> new UnauthorizedException("Usuario no encontrado"));
 
-            //Manejo específico para usuarios desactivados
+            // Manejo específico para usuarios desactivados
             if (!usuario.getActivo()) {
                 logger.warn("Usuario desactivado intentando acceder a información: {}", username);
                 return buildErrorResponse("ACCOUNT_DISABLED", "Tu cuenta ha sido desactivada", HttpStatus.FORBIDDEN);
@@ -244,7 +290,7 @@ public class AuthController {
         return modules;
     }
 
-    //Método helper para construir respuestas de error consistentes
+    // Método helper para construir respuestas de error consistentes
     private ResponseEntity<ErrorResponseDTO> buildErrorResponse(String code, String message, HttpStatus status) {
         ErrorResponseDTO error = new ErrorResponseDTO(code, message, status.value());
         return ResponseEntity.status(status).body(error);

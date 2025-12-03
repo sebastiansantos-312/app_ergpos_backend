@@ -131,11 +131,51 @@ public class InventarioAuditService {
         auditRepository.deleteRegistrosAntiguos(fechaLimite);
     }
 
-    // Método para registrar auditoría manualmente
+    // Método para registrar auditoría manualmente (versión mejorada)
     @Transactional
     public void registrarAuditoria(String eventoTipo, String tablaNombre, UUID registroId, UUID usuarioId,
             String detalle) {
-        InventarioAudit audit = new InventarioAudit(eventoTipo, tablaNombre, registroId, usuarioId, detalle);
+        // Validar que detalle no sea null o vacío
+        String detalleFinal;
+        if (detalle == null || detalle.trim().isEmpty()) {
+            detalleFinal = "{}";
+        } else {
+            // Si el detalle no es JSON válido (no empieza con { o [), convertirlo a JSON
+            String trimmed = detalle.trim();
+            if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+                // Escapar comillas dobles y caracteres especiales en el mensaje
+                String escapedMessage = trimmed
+                        .replace("\\", "\\\\")
+                        .replace("\"", "\\\"")
+                        .replace("\n", "\\n")
+                        .replace("\r", "\\r")
+                        .replace("\t", "\\t");
+                detalleFinal = String.format("{\"mensaje\": \"%s\"}", escapedMessage);
+            } else {
+                detalleFinal = detalle;
+            }
+        }
+
+        InventarioAudit audit = new InventarioAudit(eventoTipo, tablaNombre, registroId, usuarioId, detalleFinal);
+        auditRepository.save(audit);
+    }
+
+    // Método sobrecargado para registrar auditoría sin detalle
+    @Transactional
+    public void registrarAuditoria(String eventoTipo, String tablaNombre, UUID registroId, UUID usuarioId) {
+        registrarAuditoria(eventoTipo, tablaNombre, registroId, usuarioId, "{}");
+    }
+
+    // Método para registrar auditoría con objeto
+    @Transactional
+    public void registrarAuditoria(String eventoTipo, String tablaNombre, UUID registroId, UUID usuarioId,
+            Object detalleObject) {
+        InventarioAudit audit = new InventarioAudit(eventoTipo, tablaNombre, registroId, usuarioId);
+
+        if (detalleObject != null) {
+            audit.setDetalleFromObject(detalleObject);
+        }
+
         auditRepository.save(audit);
     }
 }
